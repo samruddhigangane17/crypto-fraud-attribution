@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Bell, ShieldAlert, CheckCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface MonitoringAlertsProps {
   activeCase: string | null;
@@ -12,11 +13,35 @@ const MonitoringAlerts: React.FC<MonitoringAlertsProps> = ({ activeCase }) => {
   useEffect(() => {
     if (!activeCase) return;
     setLoading(true);
+    
+    // Fetch initial mocked alerts from FastAPI
     fetch(`http://localhost:8000/api/investigations/${activeCase}/alerts`)
       .then(res => res.json())
       .then(data => setAlerts(data))
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Subscribe to Supabase Realtime for live alerts
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'alerts',
+          filter: `investigation_id=eq.${activeCase}`,
+        },
+        (payload) => {
+          console.log('New alert received in real-time!', payload.new);
+          setAlerts((prev) => [payload.new, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [activeCase]);
 
   if (!activeCase) return <div className="p-8 text-center text-gray-500">No active case selected.</div>;

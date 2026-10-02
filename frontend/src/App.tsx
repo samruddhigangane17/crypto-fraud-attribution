@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Activity, ShieldAlert, FileText, Share2, Search } from 'lucide-react';
+import { Activity, ShieldAlert, FileText, Share2, Search, LogOut } from 'lucide-react';
+import { supabase } from './lib/supabase';
+import type { Session } from '@supabase/supabase-js';
+
+import Login from './components/Login';
 import NewInvestigation from './components/NewInvestigation';
 import FundFlowGraph from './components/FundFlowGraph';
 import RiskAttribution from './components/RiskAttribution';
 import MonitoringAlerts from './components/MonitoringAlerts';
 import EvidenceReport from './components/EvidenceReport';
 
-function Dashboard() {
+function Dashboard({ session }: { session: Session }) {
   const [activeCase, setActiveCase] = useState<string | null>(null);
 
   return (
@@ -42,14 +46,29 @@ function Dashboard() {
             Evidence Report
           </Link>
         </nav>
+        
+        <div className="p-4 border-t border-gray-200">
+          <button 
+            onClick={() => supabase.auth.signOut()}
+            className="flex items-center w-full p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            Sign Out
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
           <h2 className="text-lg font-medium text-gray-800">Investigator Dashboard</h2>
-          <div className="text-sm text-gray-500">
-            {activeCase ? `Active Case: ${activeCase}` : 'No active case'}
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-500">
+              {activeCase ? `Active Case: ${activeCase}` : 'No active case'}
+            </div>
+            <div className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+              {session.user.email}
+            </div>
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">
@@ -67,9 +86,35 @@ function Dashboard() {
 }
 
 function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return <div className="h-screen flex items-center justify-center bg-gray-50">Loading application...</div>;
+  }
+
+  if (!session) {
+    return <Login />;
+  }
+
   return (
     <Router>
-      <Dashboard />
+      <Dashboard session={session} />
     </Router>
   );
 }

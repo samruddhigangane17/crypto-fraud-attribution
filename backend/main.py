@@ -6,15 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
+from api.investigations import router as investigations_router
+
 app = FastAPI(title="Real-Time Crypto Fraud Attribution API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(investigations_router)
 
 
 @app.get("/health")
