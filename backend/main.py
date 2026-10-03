@@ -6,7 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from api.investigations import router as investigations_router
+try:
+    from backend.api.investigations import router as investigations_router
+except ModuleNotFoundError:
+    from api.investigations import router as investigations_router
 
 app = FastAPI(title="Real-Time Crypto Fraud Attribution API", version="0.1.0")
 
