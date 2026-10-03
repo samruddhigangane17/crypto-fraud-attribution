@@ -7,7 +7,7 @@ and TracePath maintains a flat ordered transactions list.
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NormalizedTransaction(BaseModel):
@@ -20,6 +20,24 @@ class NormalizedTransaction(BaseModel):
     timestamp: datetime = Field(..., description="UTC timestamp of the transaction")
     block_number: Optional[int] = Field(None, description="Block number or height")
     source: str = Field(default="blockchain_api", description="Data source provider name")
+    contract_address: Optional[str] = Field(None, description="Token contract address for token transfers")
+    raw_ref: Optional[str] = Field(None, description="Reference to re-fetch the original record")
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _reject_float_amount(cls, v):
+        if isinstance(v, float):
+            raise ValueError("amount must be str, int or Decimal - not float")
+        return v
+
+    @model_validator(mode="after")
+    def _normalize_evm_addresses(self):
+        if self.chain in ("ethereum", "bsc"):
+            self.from_address = self.from_address.lower()
+            self.to_address = self.to_address.lower()
+            if self.contract_address:
+                self.contract_address = self.contract_address.lower()
+        return self
 
     def amount_decimal(self) -> Decimal:
         """Returns the transfer amount as a Python Decimal."""

@@ -17,6 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import router as attribution_router
 from backend.monitoring.scheduler import global_background_worker
 
+try:
+    from backend.api.investigations import router as investigations_router
+except ModuleNotFoundError:
+    from api.investigations import router as investigations_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +52,7 @@ app.add_middleware(
 
 # Mount Member 2's Intelligence Router
 app.include_router(attribution_router)
+app.include_router(investigations_router)
 
 
 @app.get("/health", tags=["Health"])
@@ -62,3 +67,4 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+
