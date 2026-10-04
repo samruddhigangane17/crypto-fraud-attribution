@@ -77,6 +77,7 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({ setActiveCase, acti
             value={chain}
             onChange={(e) => setChain(e.target.value)}
           >
+            <option value="auto">Auto-detect</option>
             <option value="ethereum">Ethereum (ETH)</option>
             <option value="bitcoin">Bitcoin (BTC)</option>
             <option value="tron">TRON (TRX)</option>
