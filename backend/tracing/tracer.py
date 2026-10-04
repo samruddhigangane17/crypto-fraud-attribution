@@ -170,6 +170,10 @@ class MultiHopTracer:
                 if tx.from_address.lower() != curr_addr:
                     continue
 
+                # Zero-value transfers (e.g. 0 ETH contract calls) move no funds, so never follow them
+                if tx.amount <= 0:
+                    continue
+
                 # Filter by minimum transfer amount
                 if self.min_amount is not None and tx.amount < self.min_amount:
                     continue

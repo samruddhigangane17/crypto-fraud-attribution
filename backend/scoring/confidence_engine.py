@@ -184,11 +184,21 @@ class AttributionConfidenceEngine:
         try:
             initial_amounts: list[Decimal] = []
             final_amounts: list[Decimal] = []
+            seen_pairs: set[tuple[str, str]] = set()
 
             for p in paths:
                 if p.hops:
-                    initial_amounts.append(p.hops[0].transaction.amount_decimal())
-                    final_amounts.append(p.hops[-1].transaction.amount_decimal())
+                    first_tx = p.hops[0].transaction
+                    last_tx = p.hops[-1].transaction
+                    # Count each (first transfer, last transfer) pair once
+                    pair = (first_tx.tx_hash, last_tx.tx_hash)
+                    if pair in seen_pairs:
+                        continue
+                    seen_pairs.add(pair)
+                    first_amt = first_tx.amount_decimal()
+                    initial_amounts.append(first_amt)
+                    # Funds that reach the endpoint cannot exceed what entered the path
+                    final_amounts.append(min(last_tx.amount_decimal(), first_amt))
 
             if initial_amounts and final_amounts:
                 init_sum = sum(initial_amounts)
