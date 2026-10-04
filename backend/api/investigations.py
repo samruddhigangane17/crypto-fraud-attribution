@@ -6,9 +6,14 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, Field
 
+import logging
+
+from backend.database.case_store import CaseStore
 from backend.tracing.connectors.base import BaseConnector
+from backend.tracing.connectors.factory import ConnectorUnavailableError, build_connector
 from backend.tracing.connectors.mock import MockConnector
 from backend.tracing.connectors.etherscan import EtherscanConnector, EtherscanConnectorError
+from backend.tracing.connectors.throttle import ThrottledConnector
 from backend.tracing.tracer import MultiHopTracer
 from backend.tracing.graph import FlowGraphBuilder
 from backend.tracing.analysis import WalletRelationshipAnalyzer
@@ -19,12 +24,54 @@ from backend.api.routes import run_assessment
 from backend.schemas.assessment import InvestigationAssessRequest
 from backend.schemas.transaction import TracePath as AssessTracePath
 
+logger = logging.getLogger("crypto_attribution.investigations")
+
 router = APIRouter(prefix="/api/investigations", tags=["investigations"])
 
 # In-memory storage for investigations during local development/session.
 # NOTE: This is an ephemeral in-memory store and does not survive application restarts.
 # In production, persistence is managed via Supabase by Member 3.
 _INVESTIGATIONS: Dict[str, Dict[str, Any]] = {}
+
+# Write-through persistence: memory first, Supabase as the durable copy when configured.
+_store = CaseStore(_INVESTIGATIONS)
+
+
+def _get_case(case_id: str) -> Optional[Dict[str, Any]]:
+    """Case from memory, or reloaded from Supabase after a restart."""
+    case = _INVESTIGATIONS.get(case_id)
+    if case is None:
+        case = _store.load(case_id)
+        if case is not None and case.get("status") == "completed":
+            _rebuild_assessment(case)
+    return case
+
+
+def describe_case(case_id: str) -> Optional[Dict[str, Any]]:
+    """Minimal public view of a case (None if unknown). Used by routes.py for 409 vs 404."""
+    case = _get_case(case_id)
+    return None if case is None else {"id": case["id"], "status": case["status"]}
+
+
+def restore_case(case_id: str) -> bool:
+    """Make sure a persisted case and its assessment are back in memory. True if restored."""
+    case = _get_case(case_id)
+    return case is not None and case.get("status") == "completed"
+
+
+def _rebuild_assessment(case: Dict[str, Any]) -> None:
+    """Re-run the (deterministic) assessment from stored paths; does not write to Supabase again."""
+    paths = case.get("paths") or []
+    run_assessment(
+        case["id"],
+        InvestigationAssessRequest(
+            chain=case["chain"],
+            reported_address=case["reported_address"],
+            paths=_to_assess_paths(paths, case["chain"]),
+            data_completeness=1.0,
+        ),
+        persist_remote=False,
+    )
 
 # Test hook to allow injecting mock connectors in offline unit tests
 _TEST_CONNECTOR: Optional[BaseConnector] = None
@@ -40,23 +87,15 @@ def _get_connector(chain: str, reported_address: str) -> BaseConnector:
     """Select the connector. Never silently falls back to mock data for a real address."""
     if _TEST_CONNECTOR is not None:
         return _TEST_CONNECTOR
-
-    if is_demo_address(reported_address):
-        return MockConnector()
-
-    if chain != "ethereum":
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"No live data connector for '{chain}' yet. Only Ethereum is implemented.",
+    try:
+        return build_connector(chain, reported_address)
+    except ConnectorUnavailableError as err:
+        code = (
+            status.HTTP_501_NOT_IMPLEMENTED
+            if err.reason == "unsupported_chain"
+            else status.HTTP_503_SERVICE_UNAVAILABLE
         )
-
-    api_key = os.getenv("ETHERSCAN_API_KEY", "").strip()
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ETHERSCAN_API_KEY is not set on the server. Set it in .env, or use a 0xmock_ demo address.",
-        )
-    return EtherscanConnector(api_key=api_key)
+        raise HTTPException(status_code=code, detail=str(err)) from err
 
 
 def _exchange_labels(chain: str) -> Dict[str, str]:
@@ -73,6 +112,8 @@ def _exchange_labels(chain: str) -> Dict[str, str]:
 
 
 def _data_source(connector: BaseConnector) -> str:
+    if isinstance(connector, ThrottledConnector):
+        connector = connector.inner
     if isinstance(connector, MockConnector):
         return "mock"
     if isinstance(connector, EtherscanConnector):
@@ -138,7 +179,11 @@ def create_investigation(case: InvestigationCreate):
         "paths": None,
         "analysis": None,
         "data_source": None,
+        "notice": None,
     }
+    persisted = _store.persist_case(_INVESTIGATIONS[case_id])
+    if persisted is False:
+        logger.warning("Case %s created but could not be written to Supabase", case_id)
 
     return {
         "id": case_id,
@@ -151,7 +196,7 @@ def create_investigation(case: InvestigationCreate):
 
 @router.get("/{case_id}")
 def get_investigation(case_id: str):
-    if case_id not in _INVESTIGATIONS:
+    if _get_case(case_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Investigation {case_id} not found",
@@ -165,12 +210,13 @@ def get_investigation(case_id: str):
         "created_at": case["created_at"],
         "intermediate_addresses": case.get("intermediate_addresses", []),
         "data_source": case.get("data_source"),
+        "notice": case.get("notice"),
     }
 
 
 @router.post("/{case_id}/trace")
 def start_trace(case_id: str, request: TraceRequest, background_tasks: BackgroundTasks):
-    if case_id not in _INVESTIGATIONS:
+    if _get_case(case_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Investigation {case_id} not found",
@@ -216,6 +262,22 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
         case["graph"] = cyto_graph
         case["analysis"] = summary
 
+        warnings: List[str] = []
+        if tracer.connector_errors:
+            warnings.append(
+                f"{len(tracer.connector_errors)} data request(s) to the blockchain provider failed, "
+                "so results may be incomplete (often an API rate limit). Re-run the trace to retry."
+            )
+        notice: Optional[str] = None
+        if not paths:
+            window = f" since {request.start_time.date().isoformat()}" if request.start_time else ""
+            notice = (
+                f"No outgoing transfers found{window} for this address, so there is nothing to trace "
+                "(zero paths). Check the address and chain, widen the time window, or lower the "
+                "minimum amount."
+            )
+        case["notice"] = notice
+
         # Score the traced paths so /risk, /alerts and /report work for this case
         run_assessment(
             case_id,
@@ -231,11 +293,16 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
     except HTTPException:
         raise
     except Exception as err:
+        logger.exception("Trace failed for case %s", case_id)
         # Never leak API keys or sensitive provider details in error details
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Blockchain provider failed during transaction tracing",
         ) from err
+
+    persisted = _store.persist_trace(case)
+    if persisted is False:
+        warnings.append("Results could not be saved to the database and will be lost on restart.")
 
     return {
         "message": "Tracing started",
@@ -246,13 +313,16 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
         "data_source": case["data_source"],
         "pruned_low_taint": tracer.pruned_low_taint,
         "intermediate_addresses": intermediate_addrs,
+        "notice": notice,
+        "warnings": warnings,
+        "persisted": persisted,
     }
 
 
 
 @router.get("/{case_id}/graph")
 def get_graph(case_id: str):
-    if case_id not in _INVESTIGATIONS:
+    if _get_case(case_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Investigation {case_id} not found",

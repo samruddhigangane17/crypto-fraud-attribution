@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 import time
 from typing import Any, Dict, List, Optional
 import httpx
@@ -7,6 +8,35 @@ import httpx
 from backend.schemas.transaction import NormalizedTransaction
 from backend.tracing.connectors.base import BaseConnector
 from backend.tracing.normalizer import EthereumNormalizer, NormalizationError, is_valid_eth_address
+
+
+class RequestPacer:
+    """Process-wide spacing between Etherscan requests.
+
+    Etherscan's free tier allows roughly 5 calls/second per API key. One trace, the
+    monitoring worker and the API can all run at once, so pacing has to be shared by every
+    connector instance in the process rather than per connector.
+    """
+
+    def __init__(self, min_interval: float):
+        self.min_interval = max(0.0, min_interval)
+        self._lock = threading.Lock()
+        self._next_slot = 0.0
+
+    def wait(self) -> None:
+        if self.min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._next_slot)
+            self._next_slot = slot + self.min_interval
+        delay = slot - now
+        if delay > 0:
+            time.sleep(delay)
+
+
+# Default: 4 requests/second, safely under the free-tier limit. Override with ETHERSCAN_MIN_INTERVAL.
+GLOBAL_PACER = RequestPacer(float(os.getenv("ETHERSCAN_MIN_INTERVAL", "0.25")))
 
 
 def sanitize_message(msg: str, api_key: Optional[str] = None) -> str:
@@ -54,8 +84,9 @@ class EtherscanConnector(BaseConnector):
         chain_id: int = 1,
         timeout: float = 10.0,
         client: Optional[httpx.Client] = None,
-        max_retries: int = 2,
-        retry_delay: float = 0.05,
+        max_retries: int = 3,
+        retry_delay: Optional[float] = None,
+        pacer: Optional[RequestPacer] = None,
     ):
         self.api_key = api_key if api_key is not None else os.getenv("ETHERSCAN_API_KEY", "")
         self.base_url = base_url
@@ -63,7 +94,10 @@ class EtherscanConnector(BaseConnector):
         self.timeout = timeout
         self._external_client = client
         self.max_retries = max(0, max_retries)
+        if retry_delay is None:
+            retry_delay = float(os.getenv("ETHERSCAN_RETRY_DELAY", "1.0"))
         self.retry_delay = max(0.0, retry_delay)
+        self.pacer = pacer if pacer is not None else GLOBAL_PACER
 
     def _get_client(self) -> httpx.Client:
         if self._external_client is not None:
@@ -102,6 +136,7 @@ class EtherscanConnector(BaseConnector):
 
         while attempt <= self.max_retries:
             try:
+                self.pacer.wait()
                 client = self._get_client()
                 if self._external_client is not None:
                     resp = client.get(self.base_url, params=params)

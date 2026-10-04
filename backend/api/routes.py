@@ -44,7 +44,7 @@ ENABLE_DEMO_CASES = os.getenv("ENABLE_DEMO_CASES", "true").lower() in ("true", "
 
 
 def _get_or_404(investigation_id: str) -> EvidenceReportRequest:
-    """Retrieves an existing investigation dossier or raises HTTP 404.
+    """Retrieves an existing investigation dossier, or raises 404 (unknown) / 409 (not traced yet).
 
     Strictly avoids returning fake fallback data for mistyped or non-existent cases.
     Only explicit 'DEMO-' prefixed IDs return mock data when ENABLE_DEMO_CASES is enabled.
@@ -52,6 +52,14 @@ def _get_or_404(investigation_id: str) -> EvidenceReportRequest:
     case = global_repository.get_case(investigation_id)
     if case:
         return case
+
+    # After a restart the case may only exist in Supabase; reload it and rebuild its assessment.
+    from backend.api.investigations import describe_case, restore_case  # lazy: avoids circular import
+
+    if restore_case(investigation_id):
+        case = global_repository.get_case(investigation_id)
+        if case:
+            return case
 
     # Demo cases must use explicit DEMO- prefix only
     if ENABLE_DEMO_CASES and investigation_id.startswith("DEMO-"):
@@ -63,6 +71,18 @@ def _get_or_404(investigation_id: str) -> EvidenceReportRequest:
             confidence=demo_req.confidence_assessment,
         )
         return demo_req
+
+    known = describe_case(investigation_id)
+    if known is not None:
+        # The case exists but has no assessment: tracing never completed (e.g. the provider failed).
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Investigation '{investigation_id}' exists (status: {known['status']}) but has no completed "
+                "trace, so there is no risk assessment, alerts or report yet. Re-run POST "
+                f"/api/investigations/{investigation_id}/trace and check the server log if it fails."
+            ),
+        )
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -125,7 +145,11 @@ def match_single_address(
 
 # --- Live Case Assessment Endpoint ---
 
-def run_assessment(investigation_id: str, payload: InvestigationAssessRequest) -> AssessmentResponse:
+def run_assessment(
+    investigation_id: str,
+    payload: InvestigationAssessRequest,
+    persist_remote: bool = True,
+) -> AssessmentResponse:
     """Match endpoints, score risk and confidence, raise alerts, and save the dossier.
 
     Called by POST /assess and automatically at the end of POST /trace.
@@ -214,6 +238,7 @@ def run_assessment(investigation_id: str, payload: InvestigationAssessRequest) -
         case_dossier=dossier,
         risk=risk_assessment,
         confidence=confidence_assessment,
+        persist_remote=persist_remote,
     )
 
     return AssessmentResponse(

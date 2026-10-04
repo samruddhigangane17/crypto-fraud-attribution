@@ -22,6 +22,7 @@ class MockConnector(BaseConnector):
         address: str,
         start_block: Optional[int] = None,
         end_block: Optional[int] = None,
+        include_token_transfers: bool = False,
     ) -> List[NormalizedTransaction]:
         """Return transactions where address is sender or receiver."""
         addr_lower = address.lower()

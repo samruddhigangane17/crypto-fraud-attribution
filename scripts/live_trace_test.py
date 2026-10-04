@@ -34,22 +34,9 @@ from backend.schemas.attribution import EntityCategory  # noqa: E402
 from backend.tracing.connectors.base import BaseConnector  # noqa: E402
 from backend.tracing.connectors.etherscan import EtherscanConnector  # noqa: E402
 from backend.tracing.connectors.mock import MockConnector  # noqa: E402
+from backend.tracing.connectors.throttle import ThrottledConnector  # noqa: E402
 from backend.tracing.tracer import MultiHopTracer  # noqa: E402
 from backend.tracing.validation import resolve_chain_and_address  # noqa: E402
-
-
-class ThrottledConnector(BaseConnector):
-    """Wraps a connector and spaces calls out to stay under the free-tier rate limit."""
-
-    def __init__(self, inner: BaseConnector, delay: float = 0.3):
-        self.inner = inner
-        self.delay = delay
-        self.calls = 0
-
-    def get_transactions(self, address, start_block=None, end_block=None):
-        self.calls += 1
-        time.sleep(self.delay)
-        return self.inner.get_transactions(address, start_block, end_block)
 
 
 def short(addr: str) -> str:

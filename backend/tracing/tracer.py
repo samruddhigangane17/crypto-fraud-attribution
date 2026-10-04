@@ -13,6 +13,7 @@ Assumptions & Methodological Limitations:
    common ownership or criminal intent. Results represent observed sequential flow paths.
 """
 
+import inspect
 from collections import deque
 from datetime import datetime
 from decimal import Decimal
@@ -93,6 +94,18 @@ class MultiHopTracer:
         self.intermediate_addresses: Set[str] = set()
         self.discovered_addresses: Set[str] = set()
 
+    def _connector_supports_tokens(self) -> bool:
+        """True if the connector's get_transactions accepts include_token_transfers (ERC-20 support)."""
+        try:
+            return "include_token_transfers" in inspect.signature(self.connector.get_transactions).parameters
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _asset_key(tx: NormalizedTransaction) -> tuple:
+        """Identity of the transferred asset: native coin or a specific token contract."""
+        return (tx.asset_symbol, (tx.contract_address or "").lower())
+
     def _fetch_transactions(self, address: str) -> List[NormalizedTransaction]:
         """Fetch transactions for an address using cache, recording errors gracefully."""
         addr_key = address.lower()
@@ -100,7 +113,10 @@ class MultiHopTracer:
             return self._tx_cache[addr_key]
 
         try:
-            txs = self.connector.get_transactions(address)
+            if self._connector_supports_tokens():
+                txs = self.connector.get_transactions(address, include_token_transfers=True)
+            else:
+                txs = self.connector.get_transactions(address)
             self._tx_cache[addr_key] = txs
             return txs
         except Exception as err:
@@ -180,6 +196,11 @@ class MultiHopTracer:
 
                 # Filter by upper timestamp bound if specified
                 if self.end_time is not None and tx.timestamp > self.end_time:
+                    continue
+
+                # Asset continuity: a path follows one asset. ETH arriving and USDT leaving is a
+                # different flow (swap/unrelated), and mixing units would corrupt taint maths.
+                if curr_txs and self._asset_key(tx) != self._asset_key(curr_txs[0]):
                     continue
 
                 # Temporal causality: funds cannot leave before they arrive

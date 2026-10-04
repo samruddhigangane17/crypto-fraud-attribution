@@ -10,7 +10,7 @@
 4. **Attribution Confidence Assessment**: Separate 0.0–1.0 confidence rating evaluating label provenance, hop attenuation (mathematical graph decay: $c = c_0 \times (0.85)^{\text{hop}-1}$), and fund volume continuity.
 5. **Continuous Monitoring & Alert Deduplication**: Background monitoring configuration, an async background polling worker (`BackgroundMonitoringWorker`) using `asyncio.to_thread` for non-blocking provider calls, and deterministic SHA256 event-key deduplication (`investigation_id + tx_hash + alert_type + target_address`). Supports `INFO`, `WARNING`, `HIGH`, and `CRITICAL` severity tiers.
 6. **ReportLab PDF Evidence Generator & Investigator Auth**: Professional, court/compliance-ready dossier generation with multi-hop ledgers, risk rationales, confidence scores, and legal disclaimers. Endpoints changing state (`/assess`, `/monitor`, `POST /registry/labels`) and report generation/downloads are protected with investigator authentication (with real Supabase JWT signature verification or development stub mode).
-7. **Supabase Database & Storage Contract**: Full SQL DDL migration (`001_initial_schema.sql`) and client adapter (`supabase_client.py` and `repository.py`) covering all 8 tables and the `evidence-reports` Supabase Storage bucket.
+7. **Supabase Database & Storage Contract**: Full SQL DDL migrations (`001_initial_schema.sql` + `002_persistence_and_clusters.sql`, which together are the single canonical schema) and client adapter (`supabase_client.py` and `repository.py`) covering all 8 tables and the `evidence-reports` Supabase Storage bucket.
 8. **Demo Data Isolation**: Mock data is accessible only when `ENABLE_DEMO_CASES=true` and using an explicit `DEMO-` prefix (e.g. `DEMO-INVESTIGATION-001`). Real-style case IDs (e.g. `INV-2026-9041`) must be assessed through `/assess` or return HTTP 404.
 
 ---
@@ -26,7 +26,8 @@ crypto-fraud-attribution/
 │   │   └── routes.py               # REST API endpoints for Member 2
 │   ├── database/                   # Phase 2 Supabase coordination
 │   │   ├── migrations/
-│   │   │   └── 001_initial_schema.sql # PostgreSQL DDL for tables, indexes & storage
+│   │   │   ├── 001_initial_schema.sql # PostgreSQL DDL for tables, indexes & storage
+│   │   │   └── 002_persistence_and_clusters.sql # durable case columns + wallet_clusters
 │   │   ├── repository.py           # InvestigationRepository with Supabase bridge
 │   │   ├── schema_contract.py      # Schema definitions
 │   │   └── supabase_client.py      # Supabase REST and Storage API client

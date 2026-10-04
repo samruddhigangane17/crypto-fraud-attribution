@@ -1,7 +1,5 @@
 # Data Contract (must be approved by all 3 members)
 
-Status: DRAFT -> change to APPROVED once everyone signs off in the PR.
-
 ## 1. Normalized transaction
 Defined in `backend/schemas/transaction.py`. Any change requires all 3 approvals.
 
@@ -19,9 +17,9 @@ Defined in `backend/schemas/transaction.py`. Any change requires all 3 approvals
 - **Member 2 input:** `TracePath` objects. **Output:** attribution results, risk score + factors, and a separate attribution confidence.
 
 ## 3. Open decisions (fill in)
-- [ ] First chain: ______ (plan suggests Ethereum)
+- [x] First chain: Ethereum (the only live connector today)
 - [ ] Bitcoin multi-input/multi-output flattening rule (Member 1 proposes): ______
-- [ ] Confidence scale (e.g. low/medium/high or 0-1): ______
+- [x] Confidence scale: 0.0-1.0 numeric, with a LOW/MEDIUM/HIGH level derived from it
 
 ## 4. Sign-off
 - [ ] Member 1  - [ ] Member 2  - [ ] Member 3

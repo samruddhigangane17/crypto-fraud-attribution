@@ -14,21 +14,23 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({ setActiveCase, acti
   const [hopLimit, setHopLimit] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
+    setWarnings([]);
     try {
       const created = await apiJson('/api/investigations', {
         method: 'POST',
         body: JSON.stringify({ chain, reported_address: address.trim() }),
       });
-      setActiveCase(created.id);
-
       const startTime = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
-      await apiJson(`/api/investigations/${created.id}/trace`, {
+      const traced = await apiJson(`/api/investigations/${created.id}/trace`, {
         method: 'POST',
         body: JSON.stringify({
           max_hops: hopLimit,
@@ -36,7 +38,15 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({ setActiveCase, acti
           start_time: startTime,
         }),
       });
-      navigate('/graph');
+      // Only make this the active case once tracing succeeded, so the other pages never open a
+      // case that has no results (which used to surface as confusing 404s).
+      setActiveCase(created.id);
+      setWarnings(traced.warnings ?? []);
+      if (traced.notice) {
+        setNotice(traced.notice);
+        return; // stay here: nothing to show on the graph
+      }
+      if ((traced.warnings ?? []).length === 0) navigate('/graph');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -50,6 +60,16 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({ setActiveCase, acti
       {activeCase && (
         <div className="mb-6 p-4 bg-green-50 text-green-700 border border-green-200 rounded-md">
           Current active case: {activeCase}
+        </div>
+      )}
+      {notice && (
+        <div className="mb-6 p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-md">{notice}</div>
+      )}
+      {warnings.length > 0 && (
+        <div className="mb-6 p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-md space-y-1">
+          {warnings.map((w) => (
+            <div key={w}>{w}</div>
+          ))}
         </div>
       )}
       {error && (

@@ -27,6 +27,8 @@ class MonitoringService:
 
     def register_case(self, config: MonitoringConfig) -> MonitoringConfig:
         """Enables or updates monitoring for an investigation."""
+        if not config.started_at:
+            config.started_at = datetime.now(timezone.utc).isoformat()
         self._configs[config.investigation_id] = config
         return config
 
@@ -93,6 +95,25 @@ class MonitoringService:
         config.last_checked_at = datetime.now(timezone.utc).isoformat()
         return new_alerts
 
+    @staticmethod
+    def _only_since_start(
+        config: MonitoringConfig, txs: List[NormalizedTransaction]
+    ) -> List[NormalizedTransaction]:
+        """Drop history that predates monitoring so enabling it doesn't alert on old activity."""
+        if not config.started_at:
+            return txs
+        try:
+            started = datetime.fromisoformat(config.started_at.replace("Z", "+00:00"))
+        except ValueError:
+            return txs
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+
+        def _aware(ts: datetime) -> datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+        return [t for t in txs if _aware(t.timestamp) >= started]
+
     def poll_all_active(
         self,
         transaction_provider: Callable[[str, List[str]], List[NormalizedTransaction]],
@@ -102,6 +123,7 @@ class MonitoringService:
 
         for config in self.list_active_configs():
             txs = transaction_provider(config.chain, config.watched_addresses)
+            txs = self._only_since_start(config, txs)
             alerts = self.check_investigation(config.investigation_id, txs)
             if alerts:
                 cycle_alerts[config.investigation_id] = alerts
