@@ -52,6 +52,10 @@ class MonitoringConfig(BaseModel):
     hop_limit: int = Field(default=4, ge=1, le=10)
     check_interval_seconds: int = Field(default=300, ge=30)
     last_checked_at: Optional[str] = None
+    started_at: Optional[str] = Field(
+        default=None,
+        description="When monitoring was enabled (UTC ISO). Only activity at or after this time raises monitoring alerts.",
+    )
     alert_on_exchange_deposit: bool = True
     alert_on_mixer: bool = True
     alert_on_new_tx: bool = True

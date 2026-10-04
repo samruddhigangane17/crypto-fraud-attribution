@@ -10,10 +10,12 @@ from backend.tracing.connectors.etherscan import (
     EtherscanTimeoutError,
 )
 from backend.tracing.connectors.mock import MockConnector
+from backend.tracing.connectors.throttle import ThrottledConnector
 
 __all__ = [
     "BaseConnector",
     "MockConnector",
+    "ThrottledConnector",
     "EtherscanConnector",
     "EtherscanConnectorError",
     "EtherscanRateLimitError",

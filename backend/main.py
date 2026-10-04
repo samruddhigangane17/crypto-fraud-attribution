@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import router as attribution_router
+from backend.monitoring.provider import ConnectorTransactionProvider
 from backend.monitoring.scheduler import global_background_worker
 
 try:
@@ -24,7 +25,8 @@ except ModuleNotFoundError:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Start background monitoring scheduler worker
+    # Startup: plug live connectors into the monitoring worker, then start it
+    global_background_worker.set_transaction_provider(ConnectorTransactionProvider())
     global_background_worker.start()
     yield
     # Shutdown: Stop worker gracefully

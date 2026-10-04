@@ -11,11 +11,16 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeCase) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
+    apiJson(`/api/investigations/${activeCase}`)
+      .then((c) => setNotice(c.notice ?? null))
+      .catch(() => setNotice(null));
     apiJson(`/api/investigations/${activeCase}/graph`)
       .then((data) => {
         const cytoscapeElements = [
@@ -34,6 +39,10 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
 
   if (error) {
     return <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-md">{error}</div>;
+  }
+
+  if (!loading && elements.length === 0 && notice) {
+    return <div className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-md">{notice}</div>;
   }
 
   const layout = { name: 'breadthfirst', directed: true, spacingFactor: 1.5 };

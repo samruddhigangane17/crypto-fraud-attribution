@@ -13,7 +13,13 @@ import jwt
 
 logger = logging.getLogger("crypto_attribution.auth")
 
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+def _jwt_secret() -> str:
+    # Read at call time so tests and late-loaded .env files behave predictably.
+    return os.getenv("SUPABASE_JWT_SECRET", "").strip()
+
+
+def _dev_stub_allowed() -> bool:
+    return os.getenv("ALLOW_DEV_AUTH_STUB", "").strip().lower() in ("1", "true", "yes")
 
 
 def require_authorized_investigator(
@@ -24,9 +30,9 @@ def require_authorized_investigator(
 ) -> dict:
     """Investigator authorization dependency.
 
-    In production/Phase 2: Validates Supabase JWT signature using SUPABASE_JWT_SECRET.
-    In development/prototype: If SUPABASE_JWT_SECRET is unset, operates in token stub
-    mode (verifying valid Bearer token structure), pending Member 3's Supabase Auth setup.
+    Validates the Supabase JWT signature using SUPABASE_JWT_SECRET. If the secret is unset the
+    request is rejected (fail closed) unless ALLOW_DEV_AUTH_STUB=true is set explicitly for local
+    development, in which case any well-formed Bearer token is accepted and marked unverified.
     """
     if not authorization:
         raise HTTPException(
@@ -45,14 +51,14 @@ def require_authorized_investigator(
 
     token = parts[1]
 
-    # If Supabase JWT Secret is configured in .env, verify cryptographic signature
-    if SUPABASE_JWT_SECRET:
+    secret = _jwt_secret()
+    if secret:
         try:
             payload = jwt.decode(
                 token,
-                SUPABASE_JWT_SECRET,
+                secret,
                 algorithms=["HS256"],
-                options={"verify_aud": False},
+                audience="authenticated",  # Supabase user access tokens carry aud="authenticated"
             )
             return {
                 "user_id": payload.get("sub", "investigator"),
@@ -68,8 +74,15 @@ def require_authorized_investigator(
                 detail=f"Invalid or expired investigator token: {e}",
             )
 
-    # Prototype / Development Stub Mode (when SUPABASE_JWT_SECRET is not configured)
-    logger.debug("Operating in development auth stub mode (SUPABASE_JWT_SECRET not set).")
+    if not _dev_stub_allowed():
+        logger.error("SUPABASE_JWT_SECRET is not set and ALLOW_DEV_AUTH_STUB is not enabled; rejecting request.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication is not configured on the server. Set SUPABASE_JWT_SECRET "
+            "(or ALLOW_DEV_AUTH_STUB=true for local development only).",
+        )
+
+    logger.warning("Auth stub mode: accepting an UNVERIFIED token (ALLOW_DEV_AUTH_STUB=true).")
     if token.lower() in ["invalid", "revoked", "expired"] or len(token) < 8:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -81,5 +94,5 @@ def require_authorized_investigator(
         "role": "investigator",
         "token": token,
         "verified": False,
-        "note": "Validated via development auth stub. Set SUPABASE_JWT_SECRET for production signature verification.",
+        "note": "Validated via development auth stub (ALLOW_DEV_AUTH_STUB=true). Set SUPABASE_JWT_SECRET for real verification.",
     }
