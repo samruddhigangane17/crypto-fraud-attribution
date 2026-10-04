@@ -13,6 +13,9 @@ from backend.tracing.tracer import MultiHopTracer
 from backend.tracing.graph import FlowGraphBuilder
 from backend.tracing.analysis import WalletRelationshipAnalyzer
 from tests.mock_data import MOCK_ADDRESS_LABELS
+from backend.api.routes import run_assessment
+from backend.schemas.assessment import InvestigationAssessRequest
+from backend.schemas.transaction import TracePath as AssessTracePath
 
 router = APIRouter(prefix="/api/investigations", tags=["investigations"])
 
@@ -44,6 +47,25 @@ def _get_connector(reported_address: str) -> BaseConnector:
         return MockConnector()
 
     return EtherscanConnector(api_key=api_key)
+
+
+def _to_assess_paths(paths, chain: str) -> List[AssessTracePath]:
+    """Convert Member 1 trace paths into the shape Member 2's engines expect."""
+    out = []
+    for p in paths:
+        first = p.transactions[0] if p.transactions else None
+        out.append(
+            AssessTracePath(
+                investigation_id=p.investigation_id,
+                chain=chain,
+                start_address=first.from_address if first else p.end_address,
+                end_address=p.end_address,
+                hop_count=p.hop_count,
+                transactions=p.transactions,
+                total_volume=first.amount if first else Decimal("0"),
+            )
+        )
+    return out
 
 
 class InvestigationCreate(BaseModel):
@@ -154,6 +176,18 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
         case["intermediate_addresses"] = intermediate_addrs
         case["graph"] = cyto_graph
         case["analysis"] = summary
+
+        # Score the traced paths so /risk, /alerts and /report work for this case
+        run_assessment(
+            case_id,
+            InvestigationAssessRequest(
+                chain=case["chain"],
+                reported_address=reported_address,
+                paths=_to_assess_paths(paths, case["chain"]),
+                data_completeness=0.5 if tracer.connector_errors else 1.0,
+                missing_data_notes="; ".join(tracer.connector_errors) or None,
+            ),
+        )
 
     except HTTPException:
         raise

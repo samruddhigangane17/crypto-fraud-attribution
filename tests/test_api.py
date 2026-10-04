@@ -210,3 +210,27 @@ def test_member2_routes_remain_intact():
 def test_unknown_case_risk_is_404_not_fake_data():
     client = TestClient(app)
     assert client.get("/api/investigations/does-not-exist/risk").status_code == 404
+
+
+def test_trace_populates_risk_alerts_and_report():
+    """After /trace, the real risk, alerts and report endpoints work for that case."""
+    _set_connector(None)
+    client = TestClient(app)
+    auth = {"Authorization": "Bearer dev-token-12345"}
+
+    case_id = client.post(
+        "/api/investigations",
+        json={"chain": "ethereum", "reported_address": "0xmock_wallet_a"},
+    ).json()["id"]
+    assert client.post(f"/api/investigations/{case_id}/trace", json={"max_hops": 5}).status_code == 200
+
+    risk = client.get(f"/api/investigations/{case_id}/risk")
+    assert risk.status_code == 200
+    body = risk.json()
+    assert "overall_score" in body["risk_assessment"]
+    assert "attribution_confidence" in body
+
+    assert client.get(f"/api/investigations/{case_id}/alerts").status_code == 200
+    assert client.post(f"/api/investigations/{case_id}/report", headers=auth).status_code == 201
+    pdf = client.get(f"/api/investigations/{case_id}/report/download", headers=auth)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")

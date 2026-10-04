@@ -7,7 +7,9 @@ timestamp, and confidence score.
 from typing import Dict, List, Optional, Tuple
 import uuid
 
+import os
 from backend.attribution.seed_data import (
+    DEMO_LABELS,
     SEED_UNVERIFIED_COMMUNITY_LABELS,
     SEED_VERIFIED_LABELS,
 )
@@ -50,6 +52,10 @@ class KnownAddressRegistry:
         for item in SEED_VERIFIED_LABELS:
             key = self._normalize_key(item.chain, item.address)
             self._verified_labels[key] = item
+
+        if os.getenv("ENABLE_DEMO_CASES", "true").lower() in ("true", "1", "yes"):
+            for item in DEMO_LABELS:
+                self._verified_labels[self._normalize_key(item.chain, item.address)] = item
 
         for item in SEED_UNVERIFIED_COMMUNITY_LABELS:
             key = self._normalize_key(item.chain, item.address)

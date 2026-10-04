@@ -220,3 +220,22 @@ SEED_UNVERIFIED_COMMUNITY_LABELS: list[AddressLabel] = [
         notes="DeFi Wrapped TRX token contract. Lacks VASP status.",
     ),
 ]
+
+
+# Demo-only label so the offline mock trace (0xmock_wallet_a -> ... -> 0xmock_exchange_hot)
+# ends at an attributed endpoint. Loaded only when ENABLE_DEMO_CASES=true.
+DEMO_LABELS: list[AddressLabel] = [
+    AddressLabel(
+        id="demo-mock-exchange-hot",
+        chain="ethereum",
+        address="0xmock_exchange_hot",
+        entity_name="MockExchange (DEMO DATA, not a real exchange)",
+        entity_category=EntityCategory.EXCHANGE_VASP,
+        source="Local demo fixture",
+        source_url=None,
+        confidence=0.90,
+        verified_at="2026-09-01T00:00:00Z",
+        verification_status=VerificationStatus.VERIFIED,
+        notes="Fake address used only for offline demos and tests.",
+    ),
+]

@@ -125,24 +125,10 @@ def match_single_address(
 
 # --- Live Case Assessment Endpoint ---
 
-@router.post(
-    "/investigations/{investigation_id}/assess",
-    response_model=AssessmentResponse,
-    status_code=status.HTTP_200_OK,
-)
-def assess_investigation(
-    investigation_id: str,
-    payload: InvestigationAssessRequest,
-    current_investigator: dict = Depends(require_authorized_investigator),
-):
-    """Evaluates real trace paths from Member 1's tracing engine.
+def run_assessment(investigation_id: str, payload: InvestigationAssessRequest) -> AssessmentResponse:
+    """Match endpoints, score risk and confidence, raise alerts, and save the dossier.
 
-    Restricted: Requires authorized investigator session.
-    1. Matches endpoints and intermediate nodes against known registry.
-    2. Runs explainable risk scoring engine.
-    3. Runs separate attribution confidence engine on identified destination services.
-    4. Evaluates transaction alerts and updates deduplication engine.
-    5. Stores dossier in repository for downstream report generation.
+    Called by POST /assess and automatically at the end of POST /trace.
     """
     # 1. Match endpoints across all paths
     endpoints = matcher.match_trace_paths(
@@ -239,6 +225,28 @@ def assess_investigation(
         endpoints=endpoints,
         alerts_generated=generated_alerts,
     )
+
+
+@router.post(
+    "/investigations/{investigation_id}/assess",
+    response_model=AssessmentResponse,
+    status_code=status.HTTP_200_OK,
+)
+def assess_investigation(
+    investigation_id: str,
+    payload: InvestigationAssessRequest,
+    current_investigator: dict = Depends(require_authorized_investigator),
+):
+    """Evaluates real trace paths from Member 1's tracing engine.
+
+    Restricted: Requires authorized investigator session.
+    1. Matches endpoints and intermediate nodes against known registry.
+    2. Runs explainable risk scoring engine.
+    3. Runs separate attribution confidence engine on identified destination services.
+    4. Evaluates transaction alerts and updates deduplication engine.
+    5. Stores dossier in repository for downstream report generation.
+    """
+    return run_assessment(investigation_id, payload)
 
 
 # --- Risk & Confidence Assessment Endpoints ---
