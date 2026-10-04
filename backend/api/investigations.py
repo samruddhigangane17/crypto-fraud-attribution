@@ -13,7 +13,8 @@ from backend.tracing.tracer import MultiHopTracer
 from backend.tracing.graph import FlowGraphBuilder
 from backend.tracing.analysis import WalletRelationshipAnalyzer
 from backend.tracing.validation import is_demo_address, resolve_chain_and_address
-from tests.mock_data import MOCK_ADDRESS_LABELS
+from backend.attribution.registry import global_registry
+from backend.schemas.attribution import EntityCategory
 from backend.api.routes import run_assessment
 from backend.schemas.assessment import InvestigationAssessRequest
 from backend.schemas.transaction import TracePath as AssessTracePath
@@ -56,6 +57,19 @@ def _get_connector(chain: str, reported_address: str) -> BaseConnector:
             detail="ETHERSCAN_API_KEY is not set on the server. Set it in .env, or use a 0xmock_ demo address.",
         )
     return EtherscanConnector(api_key=api_key)
+
+
+def _exchange_labels(chain: str) -> Dict[str, str]:
+    """Verified exchange/VASP addresses for this chain: {address_lower: entity_name}.
+
+    Used both to stop tracing at an exchange and to label exchange nodes in the graph.
+    """
+    return {
+        label.address.lower(): label.entity_name
+        for label in global_registry.get_all()
+        if label.chain.lower() == chain.lower()
+        and label.entity_category == EntityCategory.EXCHANGE_VASP
+    }
 
 
 def _data_source(connector: BaseConnector) -> str:
@@ -166,6 +180,7 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
 
     try:
         connector = _get_connector(case["chain"], reported_address)
+        labels = _exchange_labels(case["chain"])
         tracer = MultiHopTracer(
             connector=connector,
             max_hops=request.max_hops,
@@ -174,6 +189,7 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
             end_time=request.end_time,
             investigation_id=case_id,
             min_taint_share=request.min_taint_share,
+            target_addresses=set(labels),
         )
         paths = tracer.trace(reported_address)
         if tracer.connector_errors and not paths:
@@ -182,10 +198,6 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
                 detail="Blockchain provider failed during transaction tracing",
             )
 
-        labels = {
-            item["address"].lower(): item["entity_name"]
-            for item in MOCK_ADDRESS_LABELS
-        }
         builder = FlowGraphBuilder.build_from_paths(
             paths,
             root_address=reported_address,
