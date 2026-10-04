@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
+import { apiJson } from '../lib/api';
 
 interface FundFlowGraphProps {
   activeCase: string | null;
@@ -9,25 +10,30 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
   const [elements, setElements] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeCase) return;
     setLoading(true);
-    fetch(`http://localhost:8000/api/investigations/${activeCase}/graph`)
-      .then(res => res.json())
-      .then(data => {
+    setError(null);
+    apiJson(`/api/investigations/${activeCase}/graph`)
+      .then((data) => {
         const cytoscapeElements = [
           ...data.nodes.map((n: any) => ({ data: n.data })),
           ...data.edges.map((e: any) => ({ data: e.data }))
         ];
         setElements(cytoscapeElements);
       })
-      .catch(console.error)
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
   }, [activeCase]);
 
   if (!activeCase) {
     return <div className="p-8 text-center text-gray-500">No active case selected. Please start an investigation.</div>;
+  }
+
+  if (error) {
+    return <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-md">{error}</div>;
   }
 
   const layout = { name: 'breadthfirst', directed: true, spacingFactor: 1.5 };

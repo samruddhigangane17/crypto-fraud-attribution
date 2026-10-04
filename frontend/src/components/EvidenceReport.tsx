@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FileText, Download } from 'lucide-react';
+import { apiFetch, apiJson } from '../lib/api';
 
 interface EvidenceReportProps {
   activeCase: string | null;
@@ -7,22 +8,25 @@ interface EvidenceReportProps {
 
 const EvidenceReport: React.FC<EvidenceReportProps> = ({ activeCase }) => {
   const [loading, setLoading] = useState(false);
-  const [reportUrl, setReportUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<any>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const generateReport = async () => {
     if (!activeCase) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/investigations/${activeCase}/report`, {
-        method: 'POST'
-      });
-      await res.json();
-      
-      const getRes = await fetch(`http://localhost:8000/api/investigations/${activeCase}/report`);
-      const getData = await getRes.json();
-      setReportUrl(getData.url);
+      const metadata = await apiJson(`/api/investigations/${activeCase}/report`, { method: 'POST' });
+      setMeta(metadata);
+
+      // The download route needs the auth header, so fetch the PDF as a blob
+      const res = await apiFetch(`/api/investigations/${activeCase}/report/download`);
+      if (!res.ok) throw new Error(`${res.status}: could not download the PDF`);
+      const blob = await res.blob();
+      setPdfUrl(URL.createObjectURL(blob));
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -39,13 +43,21 @@ const EvidenceReport: React.FC<EvidenceReportProps> = ({ activeCase }) => {
           Generate an investigator-ready PDF report containing transaction hashes, timestamps, wallet paths, labels, sources, and known limitations.
         </p>
 
-        {reportUrl ? (
+        {error && (
+          <div className="mb-6 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm">{error}</div>
+        )}
+
+        {pdfUrl ? (
           <div className="p-6 bg-green-50 border border-green-200 rounded-lg max-w-md mx-auto">
             <h3 className="text-green-800 font-semibold mb-2">Report Ready</h3>
-            <a 
-              href={reportUrl} 
-              target="_blank" 
-              rel="noreferrer"
+            {meta && (
+              <p className="text-green-900 text-sm mb-3">
+                {meta.report_id} · {(meta.file_size_bytes / 1024).toFixed(1)} KB
+              </p>
+            )}
+            <a
+              href={pdfUrl}
+              download={meta?.filename ?? 'evidence_report.pdf'}
               className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
               <Download className="mr-2 h-4 w-4" />
