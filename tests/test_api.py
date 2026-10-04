@@ -190,20 +190,23 @@ def test_start_trace_connector_error_returns_502():
 
 def test_member2_routes_remain_intact():
     client = TestClient(app)
-    case_id = "test-case-id"
+    auth = {"Authorization": "Bearer dev-token-12345"}
+    case_id = "DEMO-TEST"  # only DEMO- ids return demo data
 
-    # Risk endpoint
     r_risk = client.get(f"/api/investigations/{case_id}/risk")
     assert r_risk.status_code == 200
-    assert "score" in r_risk.json()
+    assert "risk_assessment" in r_risk.json()
 
-    # Alerts endpoint
     r_alerts = client.get(f"/api/investigations/{case_id}/alerts")
     assert r_alerts.status_code == 200
     assert isinstance(r_alerts.json(), list)
 
-    # Report endpoints
-    r_rep_post = client.post(f"/api/investigations/{case_id}/report")
-    assert r_rep_post.status_code == 200
-    r_rep_get = client.get(f"/api/investigations/{case_id}/report")
+    r_rep_post = client.post(f"/api/investigations/{case_id}/report", headers=auth)
+    assert r_rep_post.status_code == 201
+    r_rep_get = client.get(f"/api/investigations/{case_id}/report", headers=auth)
     assert r_rep_get.status_code == 200
+
+
+def test_unknown_case_risk_is_404_not_fake_data():
+    client = TestClient(app)
+    assert client.get("/api/investigations/does-not-exist/risk").status_code == 404

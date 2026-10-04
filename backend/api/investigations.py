@@ -191,33 +191,4 @@ def get_graph(case_id: str):
     return case["graph"]
 
 
-@router.get("/{case_id}/risk")
-def get_risk(case_id: str):
-    return {
-        "score": 85,
-        "category": "Critical",
-        "factors": [
-            {"signal": "Hop distance to known entity", "description": "Short path to exchange"},
-            {"signal": "Laundering behaviour", "description": "Rapid pass-through observed"}
-        ],
-        "confidence": "High"
-    }
 
-@router.get("/{case_id}/alerts")
-def get_alerts(case_id: str):
-    return [
-        {
-            "id": str(uuid.uuid4()),
-            "message": "Funds reached Binance Deposit wallet",
-            "event_key": "exchange_hit",
-            "status": "unread"
-        }
-    ]
-
-@router.post("/{case_id}/report")
-def generate_report(case_id: str):
-    return {"message": "Report generated", "report_url": f"/api/investigations/{case_id}/report"}
-
-@router.get("/{case_id}/report")
-def get_report(case_id: str):
-    return {"url": "https://example.com/report.pdf"}
