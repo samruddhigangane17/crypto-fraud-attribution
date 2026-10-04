@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Activity, ShieldAlert, FileText, Share2, Search, LogOut } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { apiJson } from './lib/api';
 import type { Session } from '@supabase/supabase-js';
 
 import Login from './components/Login';
@@ -13,6 +14,20 @@ import EvidenceReport from './components/EvidenceReport';
 
 function Dashboard({ session }: { session: Session }) {
   const [activeCase, setActiveCase] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<string | null>(null);
+
+  // Look up where the active case's data came from so mock data is always labelled
+  useEffect(() => {
+    setDataSource(null);
+    if (!activeCase) return;
+    const load = () =>
+      apiJson(`/api/investigations/${activeCase}`)
+        .then((c) => setDataSource(c.data_source ?? null))
+        .catch(() => setDataSource(null));
+    load();
+    const t = setInterval(load, 4000);
+    return () => clearInterval(t);
+  }, [activeCase]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
@@ -71,6 +86,12 @@ function Dashboard({ session }: { session: Session }) {
             </div>
           </div>
         </header>
+        {dataSource === 'mock' && (
+          <div className="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2">
+            <strong>DEMO DATA:</strong> this case uses built-in mock transactions, not live blockchain data.
+            Addresses, exchange labels and amounts are fake.
+          </div>
+        )}
         <main className="flex-1 overflow-auto p-6">
           <Routes>
             <Route path="/" element={<NewInvestigation setActiveCase={setActiveCase} activeCase={activeCase} />} />

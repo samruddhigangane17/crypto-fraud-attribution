@@ -1,18 +1,29 @@
-# Secrets
-.env
-*.env.local
-
 # Python
-.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Environment files
+.env
+.env.local
+
+# Testing & Coverage
 .pytest_cache/
+.coverage
+htmlcov/
 
-# Node
-node_modules/
-dist/
+# Generated Artifacts
+generated_reports/
+*.pdf
 
-# OS / editor
-.DS_Store
+# IDE & OS
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db

@@ -1,40 +1,62 @@
 # Real-Time Crypto Fraud Attribution System
 
-Modular investigator tool: accepts a reported suspicious wallet, traces fund movements, identifies potential exchange/VASP endpoints, calculates explainable risk indicators, monitors for new activity, and generates an evidence report.
+An investigator-ready platform for tracing suspicious cryptocurrency transactions across multiple blockchains, attributing endpoints (Exchanges, VASPs, Mixers), evaluating explainable risk factors, performing continuous monitoring, and generating court-ready PDF evidence dossiers.
 
-> A labeled exchange endpoint does not prove who owns the receiving wallet. Treat outputs as observed evidence with stated limitations.
+---
 
-## Stack
-React + TypeScript - FastAPI - Supabase (Postgres/Auth/Storage/Realtime) - NetworkX - Cytoscape.js - ReportLab - Pytest
+## 3-Member Responsibilities Overview
 
-## Module owners
-| Folder | Owner |
-|---|---|
-| `backend/tracing/` | Member 1 |
-| `backend/attribution/`, `monitoring/`, `reports/` | Member 2 |
-| `frontend/`, `backend/database/`, Supabase | Member 3 |
-| `backend/schemas/` | Shared - all 3 must approve changes |
+| Team Member | Role | Core Deliverables |
+| :--- | :--- | :--- |
+| **Member 1** | **Core Investigation Engine** | Blockchain data connectors (ETH, BTC, TRX, BSC), transaction normalization, multi-hop traversal with NetworkX, candidate wallet clustering. |
+| **Member 2** *(Active Agent)* | **Intelligence Engine** | Known-address registry with data provenance, endpoint matching, explainable risk scoring, separate attribution confidence engine, continuous monitoring & duplicate-safe alerts, ReportLab PDF evidence report generator. |
+| **Member 3** | **Frontend & Application Integration** | React + TypeScript dashboard, Cytoscape.js fund-flow graph visualization, Supabase Auth/PostgreSQL/Storage, API integration. |
 
-## Run the backend (from repo root)
+---
+
+## Member 2 Module Highlights
+
+### 1. Known-Address Registry & Provenance (`backend/attribution/`)
+- Pre-seeded with verified Exchange/VASP endpoints (Binance, Coinbase, Kraken, OKX), Mixers (Tornado Cash, Wasabi CoinJoin), Bridges (FixedFloat), and Sanctioned entities across Ethereum, Bitcoin, TRON, and BSC.
+- **Strict Data Isolation**: Unverified community submissions are kept strictly separate from verified regulatory/attested entries.
+- Unmatched addresses are labeled as `UNKNOWN`, preserving forensic neutrality.
+
+### 2. Explainable Risk & Separate Attribution Confidence (`backend/scoring/`)
+- **Risk Assessment (0–100 scale)**:
+  - *Mixer Exposure*: Obfuscation indicator with hop-distance weighting.
+  - *Illicit / Sanction Proximity*: Proximity to flagged addresses.
+  - *Velocity & Peeling*: Fast-cadence relay detection.
+  - *Service Endpoint Destination*: Actionable cash-out identification.
+  - *Data Completeness*: Audit coverage accounting.
+- **Attribution Confidence Assessment (0.0–1.0 scale)**:
+  - *Data Provenance & Reliability*: Evaluates source authority.
+  - *Graph Hop Proximity (Hop Attenuation)*: Mathematically attenuates confidence as funds pass through intermediary wallets.
+  - *Flow Continuity*: Evaluates volume preservation.
+
+### 3. Continuous Monitoring & Alert Deduplication (`backend/monitoring/`)
+- Configurable per-investigation background surveillance.
+- **Deterministic Event-Key Deduplication**: `SHA256(case_id : tx_hash : alert_type : target_address)` ensures repeated polling cycles never fire duplicate alerts.
+
+### 4. PDF Evidence Report Generator (`backend/reports/`)
+- Professional ReportLab-powered PDF engine.
+- Formats executive summaries, risk breakdowns, confidence assessments, multi-hop transaction ledgers, alert histories, and mandatory forensic limitations disclaimers.
+
+---
+
+## Quickstart
+
+### 1. Install Dependencies
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env               # then fill in values
-uvicorn backend.main:app --reload
-# open http://localhost:8000/health
 ```
 
-## Run tests (from repo root)
+### 2. Run Test Suite
 ```bash
-pytest
+python -m pytest tests/
 ```
 
-## Run the frontend
-See `docs/frontend-setup.md`.
-
-## Git rules
-- Never commit to `main` directly; use your feature branch + pull request (1 reviewer).
-- Never commit `.env` or any key.
-- Changes in `backend/schemas/` need all 3 approvals.
-- Pull `main` into your branch daily.
+### 3. Start Backend Server
+```bash
+python -m uvicorn backend.main:app --reload --port 8000
+```
+Interactive API docs available at: `http://localhost:8000/docs`

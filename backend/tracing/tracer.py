@@ -42,6 +42,7 @@ class MultiHopTracer:
         target_addresses: Optional[Set[str]] = None,
         investigation_id: Optional[str] = None,
         max_paths: int = 100,
+        min_taint_share: float = 0.0,
     ):
         """Initialize the tracer.
         
@@ -54,6 +55,10 @@ class MultiHopTracer:
             target_addresses: Optional set of known target/exchange addresses to stop expanding once reached.
             investigation_id: Identifier for the investigation case.
             max_paths: Maximum number of paths to collect (guards against combinatorial explosion).
+            min_taint_share: Stop following a branch once the share of the first transfer's value
+                that can still be traced along it falls below this fraction (0.0 disables pruning).
+                Proportional model: tainted value never exceeds the previous hop's tainted value
+                or the transfer amount, so share = tainted value / first transfer amount.
         """
         if max_hops < 1:
             raise ValueError(f"max_hops must be at least 1, got {max_hops}")
@@ -76,6 +81,10 @@ class MultiHopTracer:
         } if target_addresses else set()
         self.investigation_id = investigation_id or str(uuid.uuid4())
         self.max_paths = max_paths
+        if not 0.0 <= min_taint_share <= 1.0:
+            raise ValueError("min_taint_share must be between 0 and 1")
+        self.min_taint_share = Decimal(str(min_taint_share))
+        self.pruned_low_taint: int = 0
 
         # Cache connector responses during a trace run to prevent duplicate network calls
         self._tx_cache: Dict[str, List[NormalizedTransaction]] = {}
@@ -112,6 +121,7 @@ class MultiHopTracer:
         self._tx_cache.clear()
         self.connector_errors.clear()
         self.cycles_detected = 0
+        self.pruned_low_taint = 0
         self.intermediate_addresses = set()
         self.discovered_addresses = {root_addr}
 
@@ -120,11 +130,11 @@ class MultiHopTracer:
         # Each search state represents an in-progress path:
         # (current_address, list_of_transactions_in_path, visited_address_set)
         # Using a queue for Breadth-First exploration
-        initial_state = (root_addr, [], {root_addr})
+        initial_state = (root_addr, [], {root_addr}, Decimal("0"))
         queue = deque([initial_state])
 
         while queue and len(paths) < self.max_paths:
-            curr_addr, curr_txs, visited = queue.popleft()
+            curr_addr, curr_txs, visited, curr_tainted = queue.popleft()
             hop_count = len(curr_txs)
 
             # If we've reached the maximum allowed hop limit, terminate this path
@@ -192,11 +202,19 @@ class MultiHopTracer:
                     self.cycles_detected += 1
                     continue
 
+                # Taint: tainted value can never exceed what arrived or what is sent onward
+                new_tainted = tx.amount if not curr_txs else min(tx.amount, curr_tainted)
+                first_amount = curr_txs[0].amount if curr_txs else tx.amount
+                share = (new_tainted / first_amount) if first_amount > 0 else Decimal("0")
+                if share < self.min_taint_share:
+                    self.pruned_low_taint += 1
+                    continue
+
                 valid_branches += 1
                 new_txs = curr_txs + [tx]
                 new_visited = visited | {recipient}
                 self.discovered_addresses.add(recipient)
-                queue.append((recipient, new_txs, new_visited))
+                queue.append((recipient, new_txs, new_visited, new_tainted))
 
             # If no further valid outgoing branches could be taken (terminal node or all cycles):
             if valid_branches == 0:

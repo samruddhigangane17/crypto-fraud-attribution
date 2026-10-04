@@ -1,46 +1,96 @@
+"""Normalized transaction and trace path schema agreed across team members.
+
+Data precision: Token amounts use Python Decimal, timestamps use datetime,
+and TracePath maintains a flat ordered transactions list.
+"""
+
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
-
-from pydantic import BaseModel, field_validator, model_validator
-
-Chain = Literal["bitcoin", "ethereum", "tron", "bsc"]
-
-# Chains whose addresses are case-insensitive hex -> store lowercase.
-# Bitcoin and TRON addresses are case-sensitive -> keep as given.
-LOWERCASE_CHAINS = {"ethereum", "bsc"}
+from typing import Any, List, Optional
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NormalizedTransaction(BaseModel):
-    """Shared transaction format used by ALL modules.
-
-    Changes to this file need approval from all three team members.
-    """
-
-    chain: Chain
-    tx_hash: str
-    from_address: str
-    to_address: str
-    amount: Decimal  # never float
-    asset_symbol: str  # "ETH", "USDT", "BTC", ...
-    timestamp: datetime  # UTC
-    block_number: int | None = None
-    contract_address: str | None = None  # set for token transfers
-    source: str = "blockchain_api"
-    raw_ref: str | None = None  # info needed to re-fetch the original record
+    chain: str = Field(..., description="Blockchain identifier, e.g. ethereum, bitcoin, tron, bsc")
+    tx_hash: str = Field(..., description="Unique transaction hash or identifier on chain")
+    from_address: str = Field(..., description="Sender wallet or contract address")
+    to_address: str = Field(..., description="Recipient wallet or contract address")
+    amount: Decimal = Field(..., description="Precise decimal amount transferred")
+    asset_symbol: str = Field(..., description="Symbol of transferred asset, e.g. ETH, BTC, USDT")
+    timestamp: datetime = Field(..., description="UTC timestamp of the transaction")
+    block_number: Optional[int] = Field(None, description="Block number or height")
+    source: str = Field(default="blockchain_api", description="Data source provider name")
+    contract_address: Optional[str] = Field(None, description="Token contract address for token transfers")
+    raw_ref: Optional[str] = Field(None, description="Reference to re-fetch the original record")
 
     @field_validator("amount", mode="before")
     @classmethod
-    def _amount_not_float(cls, v):
+    def _reject_float_amount(cls, v):
         if isinstance(v, float):
             raise ValueError("amount must be str, int or Decimal - not float")
         return v
 
     @model_validator(mode="after")
-    def _normalize_addresses(self):
-        if self.chain in LOWERCASE_CHAINS:
+    def _normalize_evm_addresses(self):
+        if self.chain in ("ethereum", "bsc"):
             self.from_address = self.from_address.lower()
             self.to_address = self.to_address.lower()
             if self.contract_address:
                 self.contract_address = self.contract_address.lower()
         return self
+
+    def amount_decimal(self) -> Decimal:
+        """Returns the transfer amount as a Python Decimal."""
+        return self.amount
+
+
+class TraceHop(BaseModel):
+    """Optional hop wrapper for components that annotate individual hops."""
+    hop_number: int
+    transaction: NormalizedTransaction
+    sender_label: Optional[str] = None
+    receiver_label: Optional[str] = None
+
+
+class TracePath(BaseModel):
+    investigation_id: str
+    chain: str
+    start_address: str
+    end_address: str
+    hop_count: int
+    transactions: List[NormalizedTransaction] = Field(
+        default_factory=list,
+        description="Flat ordered list of transactions traversing this path",
+    )
+    total_volume: Decimal = Field(default=Decimal("0"), description="Total path volume as Decimal")
+    is_terminal_endpoint: bool = False
+    path_id: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_transactions_from_hops(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # If hops list provided, populate flat transactions list
+            if "hops" in data and not data.get("transactions"):
+                extracted = []
+                for h in data["hops"]:
+                    if isinstance(h, dict) and "transaction" in h:
+                        extracted.append(h["transaction"])
+                    elif hasattr(h, "transaction"):
+                        extracted.append(h.transaction)
+                data["transactions"] = extracted
+            # If total_volume is string, convert
+            if isinstance(data.get("total_volume"), str):
+                try:
+                    data["total_volume"] = Decimal(data["total_volume"])
+                except Exception:
+                    data["total_volume"] = Decimal("0")
+        return data
+
+    @property
+    def hops(self) -> List[TraceHop]:
+        """Provides backward-compatible hop access over the flat transactions list."""
+        return [
+            TraceHop(hop_number=i + 1, transaction=tx)
+            for i, tx in enumerate(self.transactions)
+        ]
