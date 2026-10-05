@@ -36,8 +36,8 @@ class RiskScoringEngine:
         sanction_factor = self._evaluate_illicit_proximity(matched_endpoints)
         factors.append(sanction_factor)
 
-        # 3. Transaction Velocity / Rapid Dissipation Factor
-        velocity_factor = self._evaluate_velocity(paths)
+        # 3. Transaction Velocity & Laundering Behaviour Factor
+        velocity_factor = self._evaluate_velocity(paths, chain=chain)
         factors.append(velocity_factor)
 
         # 4. Verified Service Endpoint Destination
@@ -174,7 +174,10 @@ class RiskScoringEngine:
             },
         )
 
-    def _evaluate_velocity(self, paths: List[TracePath]) -> RiskFactor:
+    def _evaluate_velocity(self, paths: List[TracePath], chain: str = "ethereum") -> RiskFactor:
+        from backend.recovery.context_filter import global_context_filter
+        from backend.recovery.extended_signals import global_laundering_detector
+
         rapid_hops_count = 0
         min_interval_seconds: Optional[float] = None
 
@@ -195,30 +198,42 @@ class RiskScoringEngine:
                     except Exception:
                         continue
 
-        if rapid_hops_count > 0:
-            contribution = min(15.0, 5.0 * rapid_hops_count)
+        # Evaluate extended laundering signals
+        extended_signals = global_laundering_detector.detect_signals(paths, chain=chain)
+        signal_contribution = sum(s.score_contribution for s in extended_signals)
+
+        if rapid_hops_count > 0 or extended_signals:
+            base_peel = min(15.0, 5.0 * rapid_hops_count) if rapid_hops_count > 0 else 0.0
+            total_contribution = min(20.0, base_peel + signal_contribution)
+
+            descriptions = []
+            if rapid_hops_count > 0:
+                descriptions.append(f"{rapid_hops_count} rapid sequential relay hop(s) within minutes of receipt")
+            for s in extended_signals:
+                descriptions.append(s.description)
+
+            rationale = "Laundering behavior detected: " + "; ".join(descriptions)
             return RiskFactor(
-                factor_name="Transaction Velocity & Rapid Peeling",
-                score_contribution=contribution,
-                weight=0.15,
+                factor_name="Laundering Behaviour & Velocity",
+                score_contribution=total_contribution,
+                weight=0.20,
                 triggered=True,
-                rationale=(
-                    f"Observed {rapid_hops_count} rapid sequential relay hop(s) occurring within minutes of receipt. "
-                    "Rapid pass-through suggests automated peeling or intentional distribution."
-                ),
+                rationale=rationale,
                 evidence={
                     "rapid_hops_count": rapid_hops_count,
                     "fastest_transfer_seconds": min_interval_seconds,
+                    "extended_signals": [s.to_dict() for s in extended_signals],
+                    "context_filter_decisions": global_context_filter.get_decisions(),
                 },
             )
 
         return RiskFactor(
-            factor_name="Transaction Velocity & Rapid Peeling",
+            factor_name="Laundering Behaviour & Velocity",
             score_contribution=0.0,
-            weight=0.15,
+            weight=0.20,
             triggered=False,
-            rationale="Transfer cadence is within standard manual operational intervals.",
-            evidence={},
+            rationale="Transfer cadence is within standard manual operational intervals with no anomalous fragmentation.",
+            evidence={"context_filter_decisions": global_context_filter.get_decisions()},
         )
 
     def _evaluate_endpoint_destination(

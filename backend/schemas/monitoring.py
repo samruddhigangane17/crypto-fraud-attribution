@@ -20,6 +20,7 @@ class AlertType(str, Enum):
     NEW_TRANSACTION = "new_transaction"       # New transaction on watched wallet
     NEW_HOP_DETECTED = "new_hop_detected"     # Funds traversed another hop
     HIGH_RISK_INTERACTION = "high_risk_interaction" # Funds moved to known scam/sanctioned address
+    OVERDUE_RECOVERY_STEP = "overdue_recovery_step" # Golden Hour recovery step deadline passed
 
 
 class AlertStatus(str, Enum):

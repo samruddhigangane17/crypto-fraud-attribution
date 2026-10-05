@@ -207,6 +207,10 @@ class PDFEvidenceReportGenerator:
             )
         )
 
+        # 1.5 Safe-Handling Advisory Banner
+        story.append(self._build_safe_handling_banner())
+        story.append(Spacer(1, 10))
+
         # 2. Case Metadata Table
         story.append(self._build_meta_table(request, report_id))
         story.append(Spacer(1, 12))
@@ -217,25 +221,25 @@ class PDFEvidenceReportGenerator:
 
         # 4. Explainable Risk Factors Breakdown
         if request.risk_assessment:
-            story.append(Paragraph("1. Explainable Risk Factors", self.styles["SectionHeader"]))
+            story.append(Paragraph("1. Explainable Risk Factors [FINDINGS]", self.styles["SectionHeader"]))
             story.append(self._build_risk_factors_table(request.risk_assessment))
             story.append(Spacer(1, 12))
 
         # 5. Attribution Confidence Analysis
         if request.confidence_assessment:
-            story.append(Paragraph("2. Attribution Confidence & Reliability Assessment", self.styles["SectionHeader"]))
+            story.append(Paragraph("2. Attribution Confidence & Reliability Assessment [FINDINGS]", self.styles["SectionHeader"]))
             story.append(self._build_confidence_table(request.confidence_assessment))
             story.append(Spacer(1, 12))
 
         # 6. Attributed Service Endpoints (Exchange / VASP / Mixer)
         if request.endpoints:
-            story.append(Paragraph("3. Identified Service Endpoints & VASPs", self.styles["SectionHeader"]))
+            story.append(Paragraph("3. Identified Service Endpoints & VASPs [FINDINGS]", self.styles["SectionHeader"]))
             story.append(self._build_endpoints_table(request.endpoints))
             story.append(Spacer(1, 12))
 
         # 7. Multi-Hop Transaction Ledger
         if request.paths:
-            story.append(Paragraph("4. Multi-Hop Fund Flow Ledger", self.styles["SectionHeader"]))
+            story.append(Paragraph("4. Multi-Hop Fund Flow Ledger [FACTS]", self.styles["SectionHeader"]))
             story.append(self._build_transactions_table(request.paths))
             story.append(Spacer(1, 12))
 
@@ -254,6 +258,10 @@ class PDFEvidenceReportGenerator:
         pdf_bytes = buffer.getvalue()
         buffer.close()
 
+        # Compute tamper-evident cryptographic hash
+        import hashlib
+        report_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
         # Save to disk if output_dir provided
         storage_path = filename
         if output_dir:
@@ -269,9 +277,33 @@ class PDFEvidenceReportGenerator:
             file_size_bytes=len(pdf_bytes),
             created_at=datetime.now(timezone.utc).isoformat(),
             storage_path=storage_path,
+            download_url=f"/api/investigations/{request.investigation_id}/report/download?format=pdf",
+            report_hash=report_hash,
+            format="pdf",
         )
 
         return pdf_bytes, metadata
+
+    def _build_safe_handling_banner(self) -> Table:
+        from backend.schemas.report import SAFE_HANDLING_ADVISORY
+        content = [
+            Paragraph(
+                f"<b>SAFE-HANDLING ADVISORY:</b> {SAFE_HANDLING_ADVISORY}",
+                self.styles["BodyTextSmall"],
+            )
+        ]
+        t = Table([[content]], colWidths=[504])
+        t.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#FEF3C7")),
+                ("BOX", (0, 0), (0, 0), 1, colors.HexColor("#F59E0B")),
+                ("TOPPADDING", (0, 0), (0, 0), 5),
+                ("BOTTOMPADDING", (0, 0), (0, 0), 5),
+                ("LEFTPADDING", (0, 0), (0, 0), 8),
+                ("RIGHTPADDING", (0, 0), (0, 0), 8),
+            ])
+        )
+        return t
 
     def _build_meta_table(self, req: EvidenceReportRequest, report_id: str) -> Table:
         data = [

@@ -52,9 +52,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount Member 2's Intelligence Router
+from backend.api.v1 import cases_router
+
+# Mount Member Routers
 app.include_router(attribution_router)
 app.include_router(investigations_router)
+app.include_router(cases_router)
 
 
 @app.get("/health", tags=["Health"])

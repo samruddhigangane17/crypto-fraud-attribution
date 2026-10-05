@@ -56,11 +56,13 @@ class CaseStore:
         """Write the investigation, then replace its trace paths. None if not configured."""
         if not self.durable:
             return None
+        case_id = case.get("id")
         if not self.persist_case(case):
+            logger.warning("Failed to persist case %s to Supabase", case_id)
             return False
-        case_id = case["id"]
         # Replace rather than append so re-tracing a case never leaves stale paths behind.
         if not self.supabase.delete_sync("trace_paths", {"investigation_id": f"eq.{case_id}"}):
+            logger.warning("Failed to clear old trace_paths for case %s in Supabase", case_id)
             return False
         rows = []
         for p in case.get("paths") or []:
@@ -77,7 +79,10 @@ class CaseStore:
                     "is_terminal_endpoint": False,
                 }
             )
-        return self.supabase.insert_sync("trace_paths", rows) if rows else True
+        ok = self.supabase.insert_sync("trace_paths", rows) if rows else True
+        if not ok:
+            logger.warning("Failed to insert %d trace_paths for case %s into Supabase", len(rows), case_id)
+        return ok
 
     # ---- reads ------------------------------------------------------------------------
     def load(self, case_id: str) -> Optional[Dict[str, Any]]:
@@ -98,6 +103,41 @@ class CaseStore:
                 logger.warning(f"Skipping unreadable stored path for case {case_id}: {e}")
 
         status = _FROM_DB_STATUS.get(row.get("status"), "Reported")
+        graph = row.get("graph_data")
+        analysis = row.get("analysis")
+        notice = row.get("notice")
+        data_source = row.get("data_source")
+
+        # If columns were omitted due to DB schema constraints, reconstruct them for completed cases:
+        if graph is None and status == "completed":
+            try:
+                from backend.tracing.graph import FlowGraphBuilder
+                from backend.api.investigations import _exchange_labels
+                builder = FlowGraphBuilder.build_from_paths(
+                    paths,
+                    root_address=row["reported_address"],
+                    address_labels=_exchange_labels(row["chain"]),
+                )
+                graph = builder.to_cytoscape()
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Could not reconstruct graph from paths for case {case_id}: {e}")
+
+        if analysis is None and status == "completed":
+            try:
+                from backend.tracing.analysis import WalletRelationshipAnalyzer
+                analyzer = WalletRelationshipAnalyzer.from_paths(paths)
+                analysis = analyzer.get_summary()
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Could not reconstruct analysis from paths for case {case_id}: {e}")
+
+        if notice is None and status == "completed" and not paths:
+            notice = (
+                "No outgoing transfers found for this address, so there is nothing to trace (zero paths)."
+            )
+
+        if data_source is None:
+            data_source = "etherscan" if row.get("chain") in ("ethereum", "bsc") else "custom"
+
         case: Dict[str, Any] = {
             "id": row["id"],
             "chain": row["chain"],
@@ -106,11 +146,11 @@ class CaseStore:
             "timestamp": None,
             "status": status,
             "created_at": row.get("created_at"),
-            "graph": row.get("graph_data"),
+            "graph": graph,
             "paths": paths if status == "completed" else None,
-            "analysis": row.get("analysis"),
-            "data_source": row.get("data_source"),
-            "notice": row.get("notice"),
+            "analysis": analysis,
+            "data_source": data_source,
+            "notice": notice,
             "intermediate_addresses": sorted({a for p in paths for a in p.intermediate_addresses}),
         }
         self.cases[case_id] = case
