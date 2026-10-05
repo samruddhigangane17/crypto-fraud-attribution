@@ -18,6 +18,7 @@ from backend.database.repository import global_repository
 from backend.mock_data.mock_case import create_mock_investigation_request
 from backend.monitoring.alerts import global_alert_engine
 from backend.monitoring.service import global_monitoring_service
+from backend.reports.json_generator import global_json_generator
 from backend.reports.pdf_generator import global_pdf_generator
 from backend.schemas.assessment import AssessmentResponse, InvestigationAssessRequest
 from backend.schemas.attribution import (
@@ -320,7 +321,7 @@ def get_investigation_alerts(investigation_id: str):
     return global_alert_engine.get_alerts_by_investigation(investigation_id)
 
 
-# --- Evidence PDF Report Generation & Retrieval ---
+# --- Evidence Report Generation & Retrieval (PDF & JSON) ---
 
 @router.post(
     "/investigations/{investigation_id}/report",
@@ -330,23 +331,28 @@ def get_investigation_alerts(investigation_id: str):
 def generate_evidence_report(
     investigation_id: str,
     payload: Optional[EvidenceReportRequest] = None,
+    report_format: str = Query("pdf", alias="format", description="Report format: 'pdf' or 'json'"),
     current_investigator: dict = Depends(require_authorized_investigator),
 ):
-    """Generates an investigator-ready PDF evidence dossier using ReportLab.
+    """Generates an investigator-ready evidence dossier (PDF or canonical JSON).
 
     Restricted: Requires authorized investigator session (Supabase Auth token).
     """
     req = payload or _get_or_404(investigation_id)
 
-    pdf_bytes, metadata = global_pdf_generator.generate_report(req)
-    global_repository.save_report_metadata(metadata)
+    if report_format.lower() == "json":
+        raw_bytes, metadata = global_json_generator.generate_report(req)
+    else:
+        raw_bytes, metadata = global_pdf_generator.generate_report(req)
 
+    global_repository.save_report_metadata(metadata)
     return metadata
 
 
 @router.get("/investigations/{investigation_id}/report")
 def get_report_reference(
     investigation_id: str,
+    report_format: str = Query("pdf", alias="format", description="Report format: 'pdf' or 'json'"),
     current_investigator: dict = Depends(require_authorized_investigator),
 ):
     """Retrieves authorized metadata reference for the generated evidence report.
@@ -354,28 +360,61 @@ def get_report_reference(
     Restricted: Requires authorized investigator session (Supabase Auth token).
     """
     metadata = global_repository.get_report_metadata(investigation_id)
-    if not metadata:
+    if not metadata or getattr(metadata, "format", "pdf") != report_format.lower():
         req = _get_or_404(investigation_id)
-        pdf_bytes, metadata = global_pdf_generator.generate_report(req)
+        if report_format.lower() == "json":
+            raw_bytes, metadata = global_json_generator.generate_report(req)
+        else:
+            raw_bytes, metadata = global_pdf_generator.generate_report(req)
         global_repository.save_report_metadata(metadata)
 
     return metadata
 
 
 @router.get("/investigations/{investigation_id}/report/download")
-def download_evidence_report_pdf(
+def download_evidence_report(
     investigation_id: str,
+    report_format: str = Query("pdf", alias="format", description="Report format: 'pdf' or 'json'"),
     current_investigator: dict = Depends(require_authorized_investigator),
 ):
-    """Downloads the generated ReportLab PDF evidence dossier directly.
+    """Downloads the generated evidence dossier directly (PDF or canonical JSON).
 
     Restricted: Requires authorized investigator session (Supabase Auth token).
     """
     req = _get_or_404(investigation_id)
-    pdf_bytes, metadata = global_pdf_generator.generate_report(req)
+    if report_format.lower() == "json":
+        raw_bytes, metadata = global_json_generator.generate_report(req)
+        media_type = "application/json"
+    else:
+        raw_bytes, metadata = global_pdf_generator.generate_report(req)
+        media_type = "application/pdf"
 
     return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
+        content=raw_bytes,
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{metadata.filename}"'},
     )
+
+
+@router.get("/investigations/{investigation_id}/report/verify")
+def verify_report_integrity(
+    investigation_id: str,
+    report_hash: str = Query(..., description="Cryptographic SHA-256 hash to verify against stored metadata"),
+    current_investigator: dict = Depends(require_authorized_investigator),
+):
+    """Verifies that an exported report matches its stored tamper-evident SHA-256 hash."""
+    metadata = global_repository.get_report_metadata(investigation_id)
+    if not metadata or not metadata.report_hash:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No stored report hash found for investigation '{investigation_id}'.",
+        )
+    is_valid = metadata.report_hash.lower() == report_hash.strip().lower()
+    return {
+        "investigation_id": investigation_id,
+        "provided_hash": report_hash,
+        "recorded_hash": metadata.report_hash,
+        "verified": is_valid,
+        "status": "VALID_AUTHENTIC" if is_valid else "TAMPERED_OR_MODIFIED",
+        "created_at": metadata.created_at,
+    }

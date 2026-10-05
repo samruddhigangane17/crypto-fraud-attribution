@@ -302,6 +302,7 @@ def start_trace(case_id: str, request: TraceRequest, background_tasks: Backgroun
 
     persisted = _store.persist_trace(case)
     if persisted is False:
+        logger.warning("Trace for case %s could not be persisted to Supabase", case_id)
         warnings.append("Results could not be saved to the database and will be lost on restart.")
 
     return {
@@ -336,4 +337,93 @@ def get_graph(case_id: str):
     return case["graph"]
 
 
+# --- Recovery Layer Aliases on /api/investigations ---
 
+@router.get("/{case_id}/ranking")
+def get_investigation_ranking(case_id: str):
+    from backend.recovery.ranking import global_ranking_engine
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+    dossier = _get_or_404(case_id)
+    rankings = global_ranking_engine.rank_destinations(dossier.paths, dossier.endpoints)
+    return {
+        "case_id": case_id,
+        "destinations_ranked": [r.to_dict() for r in rankings],
+        "advisory_notice": "Advisory only. Authorised investigator review required prior to hold action.",
+    }
+
+
+@router.get("/{case_id}/clock")
+def get_investigation_clock(case_id: str):
+    from backend.recovery.clock import global_recovery_clock
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+    steps = global_recovery_clock.get_case_clock(case_id, check_overdue=True)
+    return {
+        "case_id": case_id,
+        "timeline_steps": [s.to_dict() for s in steps],
+        "overdue_count": sum(1 for s in steps if s.status == "overdue"),
+    }
+
+
+@router.patch("/{case_id}/clock/{step_id}")
+def update_investigation_clock_step(case_id: str, step_id: str, status_payload: dict):
+    from backend.recovery.clock import global_recovery_clock
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+    try:
+        new_status = status_payload.get("status", "done")
+        updated = global_recovery_clock.update_step_status(case_id, step_id, new_status)
+        return updated.to_dict()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{case_id}/related")
+def get_investigation_convergence(case_id: str):
+    from backend.recovery.convergence import global_convergence_engine
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+    return global_convergence_engine.get_network_view(case_id)
+
+
+@router.get("/{case_id}/summary")
+def get_investigation_summary(case_id: str):
+    from backend.recovery.ranking import global_ranking_engine
+    from backend.recovery.summary import global_summary_generator
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+    dossier = _get_or_404(case_id)
+    ranking = global_ranking_engine.rank_destinations(dossier.paths, dossier.endpoints)
+    summary = global_summary_generator.generate_summary(
+        case_id=case_id,
+        reported_address=dossier.reported_wallet,
+        chain=dossier.chain,
+        paths=dossier.paths,
+        endpoints=dossier.endpoints,
+        risk_assessment=dossier.risk_assessment,
+        confidence_assessment=dossier.confidence_assessment,
+        recovery_ranking=[r.to_dict() for r in ranking],
+        typology=getattr(dossier, "typology", None),
+    )
+    return summary.to_dict()
+
+
+@router.get("/{case_id}/clusters")
+def get_investigation_clusters(case_id: str):
+    from backend.clustering.engine import global_clustering_engine
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+    dossier = _get_or_404(case_id)
+    clusters = global_clustering_engine.analyze_clusters(dossier.paths)
+    return {
+        "case_id": case_id,
+        "clusters_count": len(clusters),
+        "clusters": [c.to_dict() for c in clusters],
+    }
