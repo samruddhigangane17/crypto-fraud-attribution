@@ -1,8 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiJson } from '../lib/api';
-import { History, Check, ArrowRight, RefreshCw } from 'lucide-react';
+import { apiJson, API_BASE } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { History, Check, ArrowRight, RefreshCw, Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { CaseSummary } from '../App';
+
+interface BulkRowError {
+  row_index: number;
+  wallet_address: string;
+  error: string;
+}
+
+interface BulkUploadResponse {
+  total_rows_read: number;
+  successfully_ingested: number;
+  failed_count: number;
+  cases: Array<{
+    case_id: string;
+    complaint_ref: string;
+    chain: string;
+    wallet_address: string;
+    status: string;
+  }>;
+  errors: BulkRowError[];
+}
 
 interface NewInvestigationProps {
   setActiveCase: (id: string) => void;
@@ -27,6 +48,14 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
   const [warnings, setWarnings] = useState<string[]>([]);
   const [recentCases, setRecentCases] = useState<CaseSummary[]>(cases);
   const [loadingRecent, setLoadingRecent] = useState(false);
+
+  // Bulk CSV upload states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkResponse, setBulkResponse] = useState<BulkUploadResponse | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const navigate = useNavigate();
 
   // Keep recent cases in sync with prop, or fetch if prop is empty
@@ -93,6 +122,62 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
   const handleOpenCase = (caseId: string) => {
     setActiveCase(caseId);
     navigate('/graph');
+  };
+
+  const handleBulkUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setBulkError('Please select a .csv file to upload.');
+      return;
+    }
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkResponse(null);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      // Do NOT manually set Content-Type header; let the browser set multipart boundary
+      const res = await fetch(`${API_BASE}/api/v1/cases/bulk`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!res.ok) {
+        let errorDetail = res.statusText;
+        try {
+          const body = await res.json();
+          errorDetail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+        } catch {
+          /* fallback to statusText */
+        }
+        throw new Error(`${res.status}: ${errorDetail}`);
+      }
+
+      const result: BulkUploadResponse = await res.json();
+      setBulkResponse(result);
+
+      // If at least one case was successfully ingested, refresh cases and notify parent
+      if (result.successfully_ingested > 0) {
+        onCaseCreated?.();
+        fetchRecentCases();
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        setSelectedFile(null);
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBulkLoading(false);
+    }
   };
 
   const getChainBadgeStyle = (chainName: string) => {
@@ -194,6 +279,106 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
           >
             {loading ? 'Starting Investigation...' : 'Start Investigation'}
           </button>
+        </form>
+      </div>
+
+      {/* Bulk CSV Upload Section */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="flex items-center space-x-2 mb-4 pb-2 border-b border-gray-100">
+          <FileSpreadsheet className="h-5 w-5 text-indigo-600" />
+          <h3 className="text-lg font-bold text-gray-800">Bulk CSV Upload</h3>
+          <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+            NCRP / SAHYOG
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">
+          Batch ingest multiple suspect wallet addresses for multi-hop tracing. Expected CSV columns:
+          <code className="text-indigo-600 ml-1 font-mono">complaint_ref, wallet_address, chain, amount, asset</code>
+        </p>
+
+        {bulkError && (
+          <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm flex items-start space-x-2">
+            <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+            <span>{bulkError}</span>
+          </div>
+        )}
+
+        {bulkResponse && (
+          <div className="mb-4 space-y-3">
+            <div
+              className={`p-3 rounded-md text-sm border flex items-center justify-between ${
+                bulkResponse.failed_count === 0
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <CheckCircle2
+                  className={`h-5 w-5 ${bulkResponse.failed_count === 0 ? 'text-emerald-600' : 'text-amber-600'}`}
+                />
+                <span className="font-medium">
+                  Upload completed: {bulkResponse.successfully_ingested} of {bulkResponse.total_rows_read} rows ingested.
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <div className="text-xs text-gray-500 font-medium">Total Rows</div>
+                <div className="text-lg font-bold text-gray-800">{bulkResponse.total_rows_read}</div>
+              </div>
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+                <div className="text-xs text-emerald-600 font-medium">Successfully Ingested</div>
+                <div className="text-lg font-bold text-emerald-700">{bulkResponse.successfully_ingested}</div>
+              </div>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <div className="text-xs text-amber-600 font-medium">Failed Rows</div>
+                <div className="text-lg font-bold text-amber-700">{bulkResponse.failed_count}</div>
+              </div>
+            </div>
+
+            {bulkResponse.errors && bulkResponse.errors.length > 0 && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-800 space-y-1">
+                <div className="font-semibold flex items-center mb-1 text-red-900">
+                  <AlertCircle className="h-4 w-4 mr-1 text-red-600 inline" />
+                  Row Validation Errors ({bulkResponse.errors.length}):
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 max-h-32 overflow-y-auto">
+                  {bulkResponse.errors.map((err, idx) => (
+                    <li key={idx} className="font-mono text-[11px]">
+                      Row {err.row_index} ({err.wallet_address || 'empty'}): {err.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleBulkUpload} className="space-y-4">
+          <div className="flex items-center space-x-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              disabled={bulkLoading}
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setSelectedFile(file);
+                setBulkError(null);
+                setBulkResponse(null);
+              }}
+              className="block w-full text-xs text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={bulkLoading || !selectedFile}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors shrink-0"
+            >
+              <Upload className="h-4 w-4 mr-1.5" />
+              {bulkLoading ? 'Uploading CSV...' : 'Upload CSV'}
+            </button>
+          </div>
         </form>
       </div>
 
