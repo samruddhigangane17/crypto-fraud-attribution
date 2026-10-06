@@ -110,7 +110,11 @@ class GroundedCaseSummaryGenerator:
             primary_vasp = matched_vasps[0]
             entity = primary_vasp.label.entity_name
             dest_addr = primary_vasp.address
-            conf = primary_vasp.confidence
+            conf = getattr(primary_vasp, "confidence", None)
+            if conf is None and primary_vasp.label:
+                conf = primary_vasp.label.confidence
+            if conf is None:
+                conf = 0.9
             all_record_ids.append(f"endpoint:{dest_addr}")
 
             s3_text = (

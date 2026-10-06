@@ -32,3 +32,10 @@ class TracePath(BaseModel):
             addrs.append(tx.to_address)
         return addrs
 
+    @property
+    def hops(self) -> list:
+        class _Hop:
+            def __init__(self, tx):
+                self.transaction = tx
+        return [_Hop(tx) for tx in self.transactions]
+

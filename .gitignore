@@ -28,3 +28,7 @@ generated_reports/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Scratch and report dumps
+scratch/
+report_sections_dump.txt

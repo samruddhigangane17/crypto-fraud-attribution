@@ -64,3 +64,9 @@ class EndpointMatchResult(BaseModel):
                 "A transaction path is observed evidence; claims about identity, intent, or the continuity of particular "
                 "funds may require additional evidence."
     )
+
+    @property
+    def confidence(self) -> float:
+        if self.label and hasattr(self.label, "confidence") and self.label.confidence is not None:
+            return float(self.label.confidence)
+        return 1.0

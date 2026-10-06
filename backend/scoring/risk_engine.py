@@ -182,11 +182,16 @@ class RiskScoringEngine:
         min_interval_seconds: Optional[float] = None
 
         for path in paths:
-            if len(path.hops) >= 2:
-                for i in range(len(path.hops) - 1):
+            raw_hops = getattr(path, "hops", None) or getattr(path, "transactions", [])
+            if len(raw_hops) >= 2:
+                for i in range(len(raw_hops) - 1):
                     try:
-                        ts1 = path.hops[i].transaction.timestamp
-                        ts2 = path.hops[i + 1].transaction.timestamp
+                        h1 = raw_hops[i]
+                        h2 = raw_hops[i + 1]
+                        tx1 = getattr(h1, "transaction", h1)
+                        tx2 = getattr(h2, "transaction", h2)
+                        ts1 = tx1.timestamp
+                        ts2 = tx2.timestamp
                         t1 = ts1 if isinstance(ts1, datetime) else datetime.fromisoformat(str(ts1).replace("Z", "+00:00"))
                         t2 = ts2 if isinstance(ts2, datetime) else datetime.fromisoformat(str(ts2).replace("Z", "+00:00"))
                         diff_sec = abs((t2 - t1).total_seconds())
