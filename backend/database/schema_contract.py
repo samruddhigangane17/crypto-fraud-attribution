@@ -77,6 +77,18 @@ Tables:
    - storage_path: text (path in Supabase Storage bucket 'evidence-reports')
    - file_size_bytes: bigint
    - created_at: timestamptz
+
+9. `audit_logs`:
+   - id: uuid (PK)
+   - event_id: text (unique)
+   - case_id: text (optional case identifier)
+   - event: text
+   - actor: text ('system' or user identifier)
+   - parameters: jsonb
+   - data_source: text
+   - timestamp: timestamptz
+   - entry_hash: text (SHA-256 tamper-evident chain link)
+   - created_at: timestamptz
 """
 
 SUPABASE_BUCKET_REPORTS = "evidence-reports"
