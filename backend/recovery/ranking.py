@@ -20,6 +20,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+from backend.recovery.freeze_point_finder import global_freeze_point_finder
 from backend.schemas.attribution import EndpointMatchResult, EntityCategory
 from backend.schemas.path import TracePath
 
@@ -38,6 +39,16 @@ class RecoverabilityDestination(BaseModel):
     tier: str  # "Act now", "Act soon", "Monitor"
     recommended_action: str
     wording_label: str = "last observed destination"
+    
+    # USP 1: Freeze-Point Finder & Minimum-Confidence Gate
+    freezable_by: str = "none"  # "Exchange" | "Tether" | "Circle" | "Exchange + Tether" | "Exchange + Circle" | "none"
+    freeze_mechanism: str = "None (Unhosted Native Asset)"  # "VASP Account Freeze" | "Smart Contract Blacklist (addBlackList)" | ...
+    issuer_contact_portal: str = "N/A - Decentralized / Unhosted Native Asset"
+    actionability_tier: str = "Monitor"  # "Act Now" | "Act Soon" | "Monitor"
+    why_this_tier: str = ""
+    confidence_gate_passed: bool = False
+    token_contract: Optional[str] = None
+    blacklist_selector: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return self.model_dump()
@@ -166,6 +177,27 @@ class RecoverabilityRankingEngine:
                 tier = "Monitor"
                 rec_action = "Funds moved onward or small residual balance. Continue passive surveillance."
 
+            # Determine chain
+            chain = ep.chain if (ep and hasattr(ep, "chain") and ep.chain) else "ethereum"
+
+            # Evaluate Freeze-Point Intelligence (USP 1)
+            freeze_info = global_freeze_point_finder.evaluate_endpoint(
+                address=dest_addr,
+                asset=d["asset"],
+                chain=chain,
+                entity_category=cat,
+                entity_name=entity_name,
+                confidence=conf,
+                hours_elapsed=hours_elapsed,
+                has_onward_transfer=has_onward,
+            )
+
+            actionability_tier = freeze_info.actionability_tier
+            if tier == "Act now":
+                actionability_tier = "Act Now"
+            elif tier == "Act soon" and actionability_tier != "Act Now":
+                actionability_tier = "Act Soon"
+
             ranked_results.append(
                 RecoverabilityDestination(
                     destination_address=dest_addr,
@@ -180,6 +212,14 @@ class RecoverabilityRankingEngine:
                     recoverability_score=total_score,
                     tier=tier,
                     recommended_action=rec_action,
+                    freezable_by=freeze_info.freezable_by,
+                    freeze_mechanism=freeze_info.freeze_mechanism,
+                    issuer_contact_portal=freeze_info.issuer_contact_portal,
+                    actionability_tier=actionability_tier,
+                    why_this_tier=freeze_info.why_this_tier,
+                    confidence_gate_passed=freeze_info.confidence_gate_passed,
+                    token_contract=freeze_info.token_contract,
+                    blacklist_selector=freeze_info.blacklist_selector,
                 )
             )
 

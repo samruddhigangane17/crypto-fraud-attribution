@@ -418,3 +418,57 @@ def verify_report_integrity(
         "status": "VALID_AUTHENTIC" if is_valid else "TAMPERED_OR_MODIFIED",
         "created_at": metadata.created_at,
     }
+
+
+# --- USP 1: Freeze-Point Finder & Statutory Freeze Notice Generator ---
+
+from backend.reports.freeze_notice_generator import (
+    FreezeNoticeRequest,
+    build_freeze_notice_data,
+    global_freeze_notice_generator,
+)
+
+
+@router.post("/freeze-notice/generate")
+def generate_freeze_notice(
+    body: FreezeNoticeRequest,
+    format: Optional[str] = Query(None, description="Output format: 'pdf' or 'json'"),
+):
+    """USP 1: Generates an official Law Enforcement Freeze & Preservation Notice with BSA 2023 s.63 Certificate."""
+    data = build_freeze_notice_data(body)
+    out_format = (format or body.format or "pdf").lower()
+
+    if out_format == "json":
+        return {
+            "case_id": data.case_id,
+            "ncrp_ack_no": data.ncrp_ack_no,
+            "destination_address": data.destination_address,
+            "entity_name": data.entity_name,
+            "freezable_by": data.freezable_by,
+            "freeze_mechanism": data.freeze_mechanism,
+            "issuer_contact_portal": data.issuer_contact_portal,
+            "traced_amount": data.traced_amount,
+            "asset": data.asset,
+            "chain": data.chain,
+            "token_contract": data.token_contract,
+            "blacklist_selector": data.blacklist_selector,
+            "attribution_confidence": data.attribution_confidence,
+            "confidence_gate_passed": data.confidence_gate_passed,
+            "registry_version": data.registry_version,
+            "bsa_section_63_certificate": {
+                "status": "Attested",
+                "system_description": "Real-Time Crypto Fraud Attribution System",
+                "registry_version": data.registry_version,
+                "electronic_evidence_act": "Bharatiya Sakshya Adhiniyam (BSA), 2023 Section 63",
+            },
+        }
+
+    pdf_bytes = global_freeze_notice_generator.generate_notice_pdf(data)
+    safe_addr = data.destination_address[:10] if data.destination_address else "wallet"
+    filename = f"Freeze_Notice_{data.case_id}_{safe_addr}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
