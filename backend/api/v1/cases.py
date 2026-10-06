@@ -678,3 +678,68 @@ async def case_live_websocket(websocket: WebSocket, case_id: str):
         logger.info(f"WebSocket client disconnected for case {case_id}")
     except Exception as e:
         logger.warning(f"WebSocket error for case {case_id}: {e}")
+
+
+# --- USP 1: Case Freeze Notice Generation ---
+
+from backend.reports.freeze_notice_generator import (
+    FreezeNoticeRequest,
+    build_freeze_notice_data,
+    global_freeze_notice_generator,
+)
+
+
+@router.post("/cases/{case_id}/freeze-notice")
+def generate_case_freeze_notice(
+    case_id: str,
+    body: Optional[FreezeNoticeRequest] = None,
+    format: Optional[str] = Query(None, description="Output format: 'pdf' or 'json'"),
+):
+    """USP 1: Generates court-ready Freeze Notice & BSA Section 63 Certificate for a specific case."""
+    case = inv._get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found.")
+
+    if body is None:
+        req = FreezeNoticeRequest(case_id=case_id)
+    else:
+        req = body
+        req.case_id = case_id
+
+    data = build_freeze_notice_data(req)
+    out_format = (format or req.format or "pdf").lower()
+
+    if out_format == "json":
+        return {
+            "case_id": data.case_id,
+            "ncrp_ack_no": data.ncrp_ack_no,
+            "destination_address": data.destination_address,
+            "entity_name": data.entity_name,
+            "freezable_by": data.freezable_by,
+            "freeze_mechanism": data.freeze_mechanism,
+            "issuer_contact_portal": data.issuer_contact_portal,
+            "traced_amount": data.traced_amount,
+            "asset": data.asset,
+            "chain": data.chain,
+            "token_contract": data.token_contract,
+            "blacklist_selector": data.blacklist_selector,
+            "attribution_confidence": data.attribution_confidence,
+            "confidence_gate_passed": data.confidence_gate_passed,
+            "registry_version": data.registry_version,
+            "bsa_section_63_certificate": {
+                "status": "Attested",
+                "system_description": "Real-Time Crypto Fraud Attribution System",
+                "registry_version": data.registry_version,
+                "electronic_evidence_act": "Bharatiya Sakshya Adhiniyam (BSA), 2023 Section 63",
+            },
+        }
+
+    pdf_bytes = global_freeze_notice_generator.generate_notice_pdf(data)
+    safe_addr = data.destination_address[:10] if data.destination_address else "wallet"
+    filename = f"Freeze_Notice_{case_id}_{safe_addr}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

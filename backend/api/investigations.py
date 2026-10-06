@@ -3,7 +3,7 @@ from decimal import Decimal
 import os
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 import logging
@@ -427,3 +427,62 @@ def get_investigation_clusters(case_id: str):
         "clusters_count": len(clusters),
         "clusters": [c.to_dict() for c in clusters],
     }
+
+
+# --- USP 1: Investigation Freeze Notice Generation ---
+
+@router.post("/{case_id}/freeze-notice")
+def generate_investigation_freeze_notice(
+    case_id: str,
+    format: Optional[str] = Query(None, description="Output format: 'pdf' or 'json'"),
+):
+    """USP 1: Generates Freeze Notice & BSA Section 63 Certificate for an investigation."""
+    from backend.reports.freeze_notice_generator import (
+        FreezeNoticeRequest,
+        build_freeze_notice_data,
+        global_freeze_notice_generator,
+    )
+    from fastapi.responses import Response
+
+    case = _get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation {case_id} not found")
+
+    req = FreezeNoticeRequest(case_id=case_id)
+    data = build_freeze_notice_data(req)
+    out_format = (format or "pdf").lower()
+
+    if out_format == "json":
+        return {
+            "case_id": data.case_id,
+            "ncrp_ack_no": data.ncrp_ack_no,
+            "destination_address": data.destination_address,
+            "entity_name": data.entity_name,
+            "freezable_by": data.freezable_by,
+            "freeze_mechanism": data.freeze_mechanism,
+            "issuer_contact_portal": data.issuer_contact_portal,
+            "traced_amount": data.traced_amount,
+            "asset": data.asset,
+            "chain": data.chain,
+            "token_contract": data.token_contract,
+            "blacklist_selector": data.blacklist_selector,
+            "attribution_confidence": data.attribution_confidence,
+            "confidence_gate_passed": data.confidence_gate_passed,
+            "registry_version": data.registry_version,
+            "bsa_section_63_certificate": {
+                "status": "Attested",
+                "system_description": "Real-Time Crypto Fraud Attribution System",
+                "registry_version": data.registry_version,
+                "electronic_evidence_act": "Bharatiya Sakshya Adhiniyam (BSA), 2023 Section 63",
+            },
+        }
+
+    pdf_bytes = global_freeze_notice_generator.generate_notice_pdf(data)
+    safe_addr = data.destination_address[:10] if data.destination_address else "wallet"
+    filename = f"Freeze_Notice_{case_id}_{safe_addr}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

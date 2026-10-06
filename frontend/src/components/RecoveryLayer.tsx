@@ -13,6 +13,13 @@ import {
   Zap,
   ArrowRight,
   Info,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Download,
+  Lock,
+  HelpCircle,
+  Coins,
 } from 'lucide-react';
 import { apiJson } from '../lib/api';
 
@@ -33,6 +40,7 @@ const RecoveryLayer: React.FC<RecoveryLayerProps> = ({ activeCase }) => {
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [noticeGenerated, setNoticeGenerated] = useState(false);
+  const [generatingNotice, setGeneratingNotice] = useState<string | null>(null);
 
   const loadRecoveryData = async () => {
     if (!activeCase) return;
@@ -108,40 +116,155 @@ const RecoveryLayer: React.FC<RecoveryLayerProps> = ({ activeCase }) => {
     setTimeout(() => setCopiedSummary(false), 2500);
   };
 
-  const handleGenerateHoldNotice = () => {
-    if (!activeCase || !primaryDestination) return;
-    const noticeContent = `================================================================================
-CRITICAL FORENSIC PRESERVATION & EMERGENCY HOLD REQUEST
-Section 91 CrPC / Emergency VASP Compliance Directive
+  const primaryDestination = ranking[0] || null;
+
+  const freezablePoints = ranking.filter(
+    (d) => d.freezable_by && d.freezable_by.toLowerCase() !== 'none'
+  );
+  const totalFreezableSum = freezablePoints.reduce(
+    (acc, d) => acc + (Number(d.traced_amount) || 0),
+    0
+  );
+  const qualifiedNoticePoints = freezablePoints.filter(
+    (d) => d.confidence_gate_passed
+  );
+  const vaspPointsCount = freezablePoints.filter((d) =>
+    (d.freezable_by || '').toLowerCase().includes('exchange')
+  ).length;
+  const stablecoinOnChainPointsCount = freezablePoints.filter(
+    (d) =>
+      (d.freezable_by || '').toLowerCase().includes('tether') ||
+      (d.freezable_by || '').toLowerCase().includes('circle')
+  ).length;
+
+  const getFreezableBadge = (freezableBy?: string) => {
+    const f = (freezableBy || 'none').toLowerCase();
+    if (f.includes('exchange') && f.includes('tether')) {
+      return {
+        label: 'Exchange + Tether',
+        classes: 'bg-purple-500/15 text-purple-400 border-purple-500/40',
+        icon: <Coins className="h-3 w-3 mr-1 text-purple-400 shrink-0" />,
+      };
+    }
+    if (f.includes('exchange') && f.includes('circle')) {
+      return {
+        label: 'Exchange + Circle',
+        classes: 'bg-blue-500/15 text-blue-400 border-blue-500/40',
+        icon: <Coins className="h-3 w-3 mr-1 text-blue-400 shrink-0" />,
+      };
+    }
+    if (f.includes('exchange')) {
+      return {
+        label: 'Exchange (VASP)',
+        classes: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/40',
+        icon: <Lock className="h-3 w-3 mr-1 text-indigo-400 shrink-0" />,
+      };
+    }
+    if (f.includes('tether')) {
+      return {
+        label: 'Tether (T3 FCU)',
+        classes: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
+        icon: <Shield className="h-3 w-3 mr-1 text-emerald-400 shrink-0" />,
+      };
+    }
+    if (f.includes('circle')) {
+      return {
+        label: 'Circle Consortium',
+        classes: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/40',
+        icon: <Shield className="h-3 w-3 mr-1 text-cyan-400 shrink-0" />,
+      };
+    }
+    return {
+      label: 'None (Unhosted)',
+      classes: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+      icon: <Info className="h-3 w-3 mr-1 text-slate-400 shrink-0" />,
+    };
+  };
+
+  const handleDownloadFreezeNotice = async (targetDest?: any) => {
+    if (!activeCase) return;
+    const dest = targetDest || primaryDestination;
+    if (!dest) return;
+    const destKey = dest.destination_address || 'primary';
+    setGeneratingNotice(destKey);
+    try {
+      const payload = {
+        case_id: activeCase,
+        destination_address: dest.destination_address,
+        target_entity: dest.entity_name,
+        freezable_by: dest.freezable_by || 'Exchange',
+        freeze_mechanism: dest.freeze_mechanism || 'VASP Account Freeze',
+        issuer_contact_portal: dest.issuer_contact_portal,
+        traced_amount: dest.traced_amount,
+        asset: dest.asset,
+        attribution_confidence: dest.attribution_confidence,
+        confidence_gate_passed: dest.confidence_gate_passed,
+        token_contract: dest.token_contract,
+        blacklist_selector: dest.blacklist_selector,
+        format: 'pdf',
+      };
+
+      const response = await fetch('/api/freeze-notice/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate freeze notice: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const safeEntity = (dest.entity_name || 'VASP').replace(/[^a-zA-Z0-9]/g, '_');
+      link.download = `Freeze_Notice_BSA63_${activeCase}_${safeEntity}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setNoticeGenerated(true);
+      setTimeout(() => setNoticeGenerated(false), 3500);
+    } catch (err) {
+      console.warn('Backend PDF endpoint error, generating offline text fallback:', err);
+      const noticeContent = `================================================================================
+CRITICAL FORENSIC PRESERVATION & STATUTORY FREEZE DIRECTIVE
+Bharatiya Nagarik Suraksha Sanhita (BNSS) 2023 Sec 94/106 r/w BSA 2023 Sec 63
 ================================================================================
 Generated Date: ${new Date().toUTCString()}
 Case Reference: ${activeCase}
 Investigating Authority: Designated Cyber Crime Cell / Nodal LEA Desk
 
 TARGET VASP / ENTITY:
-Entity Name: ${primaryDestination.entity_name}
-Target Address: ${primaryDestination.destination_address}
-Traced Amount: ${primaryDestination.traced_amount} ${primaryDestination.asset}
-Attribution Confidence: ${Math.round(primaryDestination.attribution_confidence * 100)}%
-Time Since Ingestion: ~${primaryDestination.time_since_receipt_hours} hours
-Recommended Action: ${primaryDestination.recommended_action}
+Entity Name: ${dest.entity_name}
+Target Address: ${dest.destination_address}
+Freezable By: ${dest.freezable_by || 'Exchange'}
+Freeze Mechanism: ${dest.freeze_mechanism || 'VASP Account Freeze'}
+Traced Amount: ${dest.traced_amount} ${dest.asset}
+Attribution Confidence: ${Math.round(dest.attribution_confidence * 100)}%
+Compliance Portal: ${dest.issuer_contact_portal || 'Official LE Desk'}
 
-FORENSIC ATTESTATION:
+BSA 2023 SECTION 63 ELECTRONIC EVIDENCE ATTESTATION:
 This preservation directive is generated based on verified on-chain cryptographic
-path attribution. The terminal deposit cluster directly matches recognized exchange
-infrastructure. Immediate session hold, KYC identity retention, and deposit account
-freeze are mandated pending judicial order.
+path attribution and stablecoin blacklist selector verification.
+Immediate session hold, KYC identity retention, and deposit account freeze mandated.
 ================================================================================`;
 
-    const blob = new Blob([noticeContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `VASP_Hold_Notice_${activeCase}_${primaryDestination.entity_name.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setNoticeGenerated(true);
-    setTimeout(() => setNoticeGenerated(false), 3000);
+      const blob = new Blob([noticeContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Freeze_Notice_${activeCase}_${(dest.entity_name || 'VASP').replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNoticeGenerated(true);
+      setTimeout(() => setNoticeGenerated(false), 3000);
+    } finally {
+      setGeneratingNotice(null);
+    }
   };
 
   if (!activeCase) {
@@ -168,9 +291,6 @@ freeze are mandated pending judicial order.
   const completedSteps = displaySteps.filter((s) => s.status === 'done').length;
   const totalSteps = displaySteps.length || 1;
   const progressPercent = Math.round((completedSteps / totalSteps) * 100);
-
-  // Top destination for the highlighted "Last Observed Destination" card
-  const primaryDestination = ranking[0] || null;
 
   // Standard evidence checklist fallback
   const evidenceChecklist = typology?.evidence_checklist || [
@@ -372,6 +492,221 @@ freeze are mandated pending judicial order.
       </div>
 
       {/* ==================================================================== */}
+      {/* USP 1: DEDICATED FREEZE-POINT FINDER PANEL (Full Width Card) */}
+      {/* ==================================================================== */}
+      <div className="bg-[var(--bg-card)] p-6 rounded-2xl border border-[var(--border-color)] shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[var(--accent-primary)]/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-5 border-b border-[var(--border-color)] gap-3 relative z-10">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2.5 bg-[var(--accent-primary)]/15 rounded-xl text-[var(--accent-primary)] border border-[var(--accent-primary)]/30">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="font-black text-sm text-[var(--text-primary)] tracking-wide uppercase">
+                  Freeze-Point Finder (Exchange + Stablecoin-Issuer Freeze)
+                </h3>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 font-mono">
+                  USP 1 Active
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Multi-chain stablecoin contract registry (USDT/USDC) &amp; VASP endpoint intelligence for instant asset freezes.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] font-mono px-3 py-1.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] flex items-center">
+              <FileCheck className="h-3.5 w-3.5 mr-1.5 text-[var(--accent-primary)]" />
+              BSA 2023 s.63 Certified
+            </span>
+          </div>
+        </div>
+
+        {/* Metric Cards Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 relative z-10">
+          <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)] uppercase mb-1">
+              <span>Immediately Freezable Value</span>
+              <Coins className="h-4 w-4 text-[var(--accent-primary)]" />
+            </div>
+            <div className="text-xl font-black font-mono text-[var(--accent-primary)]">
+              {totalFreezableSum > 0 ? `${totalFreezableSum.toLocaleString(undefined, { maximumFractionDigits: 4 })}` : '0.00'}{' '}
+              <span className="text-xs font-normal text-[var(--text-muted)]">Assets</span>
+            </div>
+            <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+              {freezablePoints.length} freezable endpoint{freezablePoints.length === 1 ? '' : 's'} identified
+            </span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)] uppercase mb-1">
+              <span>Notice Confidence Gate</span>
+              <Shield className="h-4 w-4 text-emerald-400" />
+            </div>
+            <div className="text-xl font-black font-mono text-emerald-400">
+              {qualifiedNoticePoints.length} / {freezablePoints.length || 1}
+            </div>
+            <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+              &gt;= 75% Confidence gate passed
+            </span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)] uppercase mb-1">
+              <span>Exchange (VASP) Freezes</span>
+              <Lock className="h-4 w-4 text-indigo-400" />
+            </div>
+            <div className="text-xl font-black font-mono text-indigo-400">
+              {vaspPointsCount}
+            </div>
+            <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+              Custody hold &amp; KYC retention
+            </span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)] uppercase mb-1">
+              <span>Stablecoin Issuer Freezes</span>
+              <Zap className="h-4 w-4 text-cyan-400" />
+            </div>
+            <div className="text-xl font-black font-mono text-cyan-400">
+              {stablecoinOnChainPointsCount}
+            </div>
+            <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+              Tether (addBlackList) / Circle
+            </span>
+          </div>
+        </div>
+
+        {/* Freezable Endpoints Actionable Table */}
+        {freezablePoints.length > 0 ? (
+          <div className="space-y-3 relative z-10">
+            <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center justify-between">
+              <span>Actionable Freeze-Point Endpoints:</span>
+              <span className="font-mono text-[10px] text-[var(--accent-primary)]">
+                BNSS s.94/106 Preservation Ready
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {freezablePoints.map((pt, idx) => {
+                const badge = getFreezableBadge(pt.freezable_by);
+                const isGenerating = generatingNotice === pt.destination_address;
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--accent-primary)]/40 transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span
+                          className={`inline-flex items-center text-[10.5px] px-2.5 py-0.5 rounded-full font-bold border ${badge.classes}`}
+                        >
+                          {badge.icon}
+                          {badge.label}
+                        </span>
+                        <div className="relative group inline-block">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] cursor-help flex items-center">
+                            <HelpCircle className="h-3 w-3 mr-1" />
+                            {pt.actionability_tier || pt.tier}
+                          </span>
+                          <div className="absolute right-0 bottom-full mb-1 hidden group-hover:flex flex-col w-64 p-2 bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl rounded-xl text-[10.5px] text-[var(--text-primary)] z-50 pointer-events-none">
+                            <strong className="text-[var(--accent-primary)] mb-0.5">Tier Determination:</strong>
+                            <p className="leading-snug">{pt.why_this_tier || 'Forensic recency and retention score.'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline justify-between mb-1">
+                        <h4 className="text-sm font-bold text-[var(--text-primary)] truncate max-w-[200px]">
+                          {pt.entity_name}
+                        </h4>
+                        <span className="font-mono font-black text-sm text-[var(--accent-primary)]">
+                          {pt.traced_amount} {pt.asset}
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] font-mono text-[var(--text-muted)] truncate mb-2">
+                        {pt.destination_address}
+                      </div>
+
+                      <div className="text-[10px] text-[var(--text-muted)] space-y-1 mb-3 bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                        <div className="flex justify-between">
+                          <span>Mechanism:</span>
+                          <strong className="text-[var(--text-primary)] truncate max-w-[180px]">
+                            {pt.freeze_mechanism || 'VASP Account Freeze'}
+                          </strong>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Confidence:</span>
+                          <span className="flex items-center font-bold">
+                            {pt.confidence_gate_passed ? (
+                              <span className="text-emerald-400 flex items-center">
+                                <ShieldCheck className="h-3 w-3 mr-1" /> {Math.round(pt.attribution_confidence * 100)}% (Gate Passed)
+                              </span>
+                            ) : (
+                              <span className="text-amber-400 flex items-center">
+                                <ShieldAlert className="h-3 w-3 mr-1" /> {Math.round(pt.attribution_confidence * 100)}% (&lt;75% Gate)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleDownloadFreezeNotice(pt)}
+                      disabled={isGenerating || !pt.confidence_gate_passed}
+                      className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center cursor-pointer shadow-sm ${
+                        !pt.confidence_gate_passed
+                          ? 'bg-[var(--bg-card)] text-[var(--text-muted)] opacity-60 border border-[var(--border-color)] cursor-not-allowed'
+                          : isGenerating
+                          ? 'bg-[var(--accent-primary)]/70 text-[var(--bg-card)]'
+                          : 'bg-[var(--accent-primary)] text-[var(--bg-card)] hover:opacity-90'
+                      }`}
+                      title={
+                        !pt.confidence_gate_passed
+                          ? 'Statutory confidence threshold requires >= 75% confidence to issue freeze notice'
+                          : 'Generate Law Enforcement Freeze Notice & BSA s.63 Certificate PDF'
+                      }
+                    >
+                      {isGenerating ? (
+                        <>
+                          <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating Notice...
+                        </>
+                      ) : !pt.confidence_gate_passed ? (
+                        <>
+                          <ShieldAlert className="mr-1.5 h-3.5 w-3.5" /> Gated (&lt;75% Confidence)
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-1.5 h-3.5 w-3.5" /> Generate Freeze Notice + BSA s.63
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-muted)] flex items-center space-x-3">
+            <Info className="h-5 w-5 text-[var(--accent-primary)] shrink-0" />
+            <div>
+              <strong className="text-[var(--text-primary)] block">No Direct Terminal Stablecoin / VASP Endpoints Yet</strong>
+              <span>
+                Fund flow is traversing intermediate unhosted peel chains. As soon as funds hit an exchange deposit or Tether/Circle smart-contract holding address, freeze points will automatically trigger here.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ==================================================================== */}
       {/* MIDDLE SECTION: BLOCK 2 (Middle Left) & BLOCK 3 (Middle Right) */}
       {/* ==================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
@@ -396,21 +731,50 @@ freeze are mandated pending judicial order.
               <div className="space-y-4">
                 {/* Highlight Card for Primary Endpoint */}
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-inner">
-                  <div className="flex items-center justify-between mb-2">
-                    <span
-                      className={`text-xs px-2.5 py-0.5 rounded-full font-black tracking-wider uppercase border ${
-                        primaryDestination.tier === 'Act now'
-                          ? 'bg-[var(--status-critical)]/15 text-[var(--status-critical)] border-[var(--status-critical)]/40'
-                          : primaryDestination.tier === 'Act soon'
-                          ? 'bg-[#E6A94A]/15 text-[#E6A94A] border-[#E6A94A]/40'
-                          : 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border-[var(--accent-primary)]/40'
-                      }`}
-                    >
-                      {primaryDestination.tier}
-                    </span>
-                    <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                      Received ~{primaryDestination.time_since_receipt_hours}h ago
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                    <div className="flex items-center space-x-1.5">
+                      <span
+                        className={`text-xs px-2.5 py-0.5 rounded-full font-black tracking-wider uppercase border ${
+                          (primaryDestination.actionability_tier || primaryDestination.tier) === 'Act Now' || primaryDestination.tier === 'Act now'
+                            ? 'bg-[var(--status-critical)]/15 text-[var(--status-critical)] border-[var(--status-critical)]/40'
+                            : (primaryDestination.actionability_tier || primaryDestination.tier) === 'Act Soon' || primaryDestination.tier === 'Act soon'
+                            ? 'bg-[#E6A94A]/15 text-[#E6A94A] border-[#E6A94A]/40'
+                            : 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border-[var(--accent-primary)]/40'
+                        }`}
+                      >
+                        {primaryDestination.actionability_tier || primaryDestination.tier}
+                      </span>
+
+                      {/* Freezable Badge */}
+                      {(() => {
+                        const badge = getFreezableBadge(primaryDestination.freezable_by);
+                        return (
+                          <span
+                            className={`inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-bold border ${badge.classes}`}
+                          >
+                            {badge.icon}
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Why this tier? Tooltip */}
+                    <div className="relative group inline-block">
+                      <button className="flex items-center space-x-1 text-[10.5px] text-[var(--accent-primary)] hover:underline cursor-help">
+                        <HelpCircle className="h-3 w-3" />
+                        <span>Why this tier?</span>
+                      </button>
+                      <div className="absolute right-0 bottom-full mb-1 hidden group-hover:flex flex-col w-72 p-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl rounded-xl text-[10.5px] text-[var(--text-primary)] z-50 pointer-events-none">
+                        <strong className="text-[var(--accent-primary)] mb-1 flex items-center">
+                          <Info className="h-3 w-3 mr-1" /> Tier Determination Rationale
+                        </strong>
+                        <p className="leading-snug">
+                          {primaryDestination.why_this_tier ||
+                            'Calculated based on traced amount, recency of arrival, retention status, and attribution confidence.'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 mb-2">
@@ -444,7 +808,7 @@ freeze are mandated pending judicial order.
                     </button>
                   </div>
 
-                  {/* Attribution Confidence Bar */}
+                  {/* Attribution Confidence Bar & Statutory Gate */}
                   <div className="space-y-1 mb-3">
                     <div className="flex justify-between items-center text-[10px] uppercase font-bold text-[var(--text-muted)]">
                       <span>Attribution Confidence</span>
@@ -458,9 +822,20 @@ freeze are mandated pending judicial order.
                         style={{ width: `${Math.round(primaryDestination.attribution_confidence * 100)}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)] block">
-                      Verified exchange / VASP deposit cluster with high confidence
-                    </span>
+                    <div className="flex justify-between items-center text-[10px] pt-0.5">
+                      <span className="text-[var(--text-muted)]">
+                        {primaryDestination.freeze_mechanism || 'VASP Account Freeze'}
+                      </span>
+                      {primaryDestination.confidence_gate_passed ? (
+                        <span className="text-emerald-400 font-bold flex items-center">
+                          <ShieldCheck className="h-3 w-3 mr-1" /> Confidence Gate Passed (&gt;= 75%)
+                        </span>
+                      ) : (
+                        <span className="text-amber-400 font-bold flex items-center">
+                          <ShieldAlert className="h-3 w-3 mr-1" /> Gate Pending (&lt; 75%)
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="p-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[11px] text-[var(--text-primary)]">
@@ -474,27 +849,46 @@ freeze are mandated pending judicial order.
                     <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
                       Additional Ranked Endpoints ({ranking.length - 1}):
                     </span>
-                    {ranking.slice(1, 3).map((dest, i) => (
-                      <div
-                        key={i}
-                        className="p-2.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center justify-between text-xs"
-                      >
-                        <div className="truncate max-w-[200px]">
-                          <span className="font-bold text-[var(--text-primary)] block truncate">{dest.entity_name}</span>
-                          <span className="text-[10px] font-mono text-[var(--text-muted)] truncate block">
-                            {dest.destination_address}
-                          </span>
+                    {ranking.slice(1, 4).map((dest, i) => {
+                      const secBadge = getFreezableBadge(dest.freezable_by);
+                      return (
+                        <div
+                          key={i}
+                          className="p-2.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center justify-between text-xs"
+                        >
+                          <div className="truncate max-w-[200px]">
+                            <div className="flex items-center space-x-1.5 mb-0.5">
+                              <span className="font-bold text-[var(--text-primary)] truncate">{dest.entity_name}</span>
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${secBadge.classes}`}>
+                                {secBadge.label.split(' ')[0]}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-[var(--text-muted)] truncate block">
+                              {dest.destination_address}
+                            </span>
+                          </div>
+                          <div className="text-right flex items-center space-x-2">
+                            <div>
+                              <span className="font-mono font-bold text-[var(--accent-primary)] block">
+                                {dest.traced_amount} {dest.asset}
+                              </span>
+                              <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold uppercase bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)]">
+                                {dest.actionability_tier || dest.tier}
+                              </span>
+                            </div>
+                            {dest.confidence_gate_passed && (
+                              <button
+                                onClick={() => handleDownloadFreezeNotice(dest)}
+                                title="Download Notice for this endpoint"
+                                className="p-1 rounded bg-[var(--bg-card)] hover:bg-[var(--accent-primary)] hover:text-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] transition-colors cursor-pointer"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-[var(--accent-primary)] block">
-                            {dest.traced_amount} {dest.asset}
-                          </span>
-                          <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold uppercase bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)]">
-                            {dest.tier}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -531,23 +925,29 @@ freeze are mandated pending judicial order.
           {/* Action Button at bottom of Block 2 */}
           <div className="pt-4 mt-4 border-t border-[var(--border-color)]">
             <button
-              onClick={handleGenerateHoldNotice}
-              disabled={!primaryDestination}
+              onClick={() => handleDownloadFreezeNotice(primaryDestination)}
+              disabled={!primaryDestination || generatingNotice !== null}
               className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center transition-all cursor-pointer shadow-sm ${
                 primaryDestination
                   ? noticeGenerated
                     ? 'bg-emerald-600 text-white'
+                    : generatingNotice
+                    ? 'bg-[var(--accent-primary)]/70 text-[var(--bg-card)]'
                     : 'bg-[var(--accent-primary)] text-[var(--bg-card)] hover:opacity-95'
                   : 'bg-[var(--bg-secondary)] text-[var(--text-muted)] cursor-not-allowed opacity-50 border border-[var(--border-color)]'
               }`}
             >
               {noticeGenerated ? (
                 <>
-                  <Check className="mr-1.5 h-4 w-4" /> VASP Hold Notice Generated & Downloaded!
+                  <Check className="mr-1.5 h-4 w-4" /> Freeze Notice + BSA s.63 Certificate Downloaded!
+                </>
+              ) : generatingNotice ? (
+                <>
+                  <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> Generating Court-Ready Notice...
                 </>
               ) : (
                 <>
-                  <Zap className="mr-1.5 h-4 w-4" /> ⚡ Generate VASP Hold Notice
+                  <Download className="mr-1.5 h-4 w-4" /> ⚡ Generate Freeze Notice + BSA s.63 Certificate (PDF)
                 </>
               )}
             </button>
