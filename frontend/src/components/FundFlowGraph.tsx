@@ -5,6 +5,7 @@ import {
   Play,
   RefreshCw,
   AlertCircle,
+  AlertTriangle,
   Box,
   Layers,
   Info,
@@ -70,12 +71,13 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
     setTraceError(null);
     setNotice(null);
 
+    let fetchedCase: InvestigationInfo | null = null;
     // 1. Fetch investigation metadata
     try {
-      const c = await apiJson<InvestigationInfo>(`/api/investigations/${activeCase}`);
-      setCaseInfo(c);
-      setNotice(c.notice ?? null);
-      if (c.status === 'Reported') {
+      fetchedCase = await apiJson<InvestigationInfo>(`/api/investigations/${activeCase}`);
+      setCaseInfo(fetchedCase);
+      setNotice(fetchedCase.notice ?? null);
+      if (fetchedCase.status === 'Reported') {
         setElements([]);
         setLoading(false);
         return;
@@ -85,10 +87,27 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
     // 2. Fetch graph elements
     try {
       const data = await apiJson(`/api/investigations/${activeCase}/graph`);
-      const cytoscapeElements = [
-        ...data.nodes.map((n: any) => ({ data: n.data })),
-        ...data.edges.map((e: any) => ({ data: e.data })),
+      let cytoscapeElements = [
+        ...(data.nodes || []).map((n: any) => ({ data: n.data })),
+        ...(data.edges || []).map((e: any) => ({ data: e.data })),
       ];
+
+      // If tracing returned zero paths, synthesize root node so the canvas is never a blank void
+      if (cytoscapeElements.length === 0 && (fetchedCase?.reported_address || caseInfo?.reported_address)) {
+        const rootAddr = fetchedCase?.reported_address || caseInfo?.reported_address || '';
+        cytoscapeElements = [
+          {
+            data: {
+              id: rootAddr.toLowerCase(),
+              label: `${rootAddr.slice(0, 6)}...${rootAddr.slice(-4)} (Root)`,
+              type: 'victim',
+              address: rootAddr,
+              chain: fetchedCase?.chain || caseInfo?.chain,
+              status: 'Unspent / Zero Forward Hops in Lookback Window',
+            },
+          },
+        ];
+      }
       setElements(cytoscapeElements);
     } catch (err: any) {
       setError(err instanceof Error ? err.message : String(err));
@@ -101,12 +120,29 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
     loadGraph();
   }, [activeCase]);
 
+  // Ensure Cytoscape recalculates layout and fits within canvas when elements change
+  useEffect(() => {
+    if (cyRef.current && elements.length > 0) {
+      const timer = setTimeout(() => {
+        try {
+          cyRef.current?.resize();
+          const l = cyRef.current?.layout(layout);
+          l?.run();
+          cyRef.current?.fit(undefined, 40);
+        } catch (e) {
+          console.warn('Cytoscape layout error:', e);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [elements, is3DView]);
+
   const handleStartTrace = async () => {
     if (!activeCase) return;
     setIsTracing(true);
     setTraceError(null);
     try {
-      const startTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const startTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
       const traced = await apiJson(`/api/investigations/${activeCase}/trace`, {
         method: 'POST',
         body: JSON.stringify({
@@ -121,10 +157,26 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
       }
 
       const data = await apiJson(`/api/investigations/${activeCase}/graph`);
-      const cytoscapeElements = [
-        ...data.nodes.map((n: any) => ({ data: n.data })),
-        ...data.edges.map((e: any) => ({ data: e.data })),
+      let cytoscapeElements = [
+        ...(data.nodes || []).map((n: any) => ({ data: n.data })),
+        ...(data.edges || []).map((e: any) => ({ data: e.data })),
       ];
+
+      if (cytoscapeElements.length === 0 && caseInfo?.reported_address) {
+        const rootAddr = caseInfo.reported_address;
+        cytoscapeElements = [
+          {
+            data: {
+              id: rootAddr.toLowerCase(),
+              label: `${rootAddr.slice(0, 6)}...${rootAddr.slice(-4)} (Root)`,
+              type: 'victim',
+              address: rootAddr,
+              chain: caseInfo.chain,
+              status: 'Unspent / Zero Forward Hops in Lookback Window',
+            },
+          },
+        ];
+      }
       setElements(cytoscapeElements);
 
       const updated = await apiJson<InvestigationInfo>(`/api/investigations/${activeCase}`);
@@ -215,11 +267,17 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
   }
 
   if (error) {
-    return <div className="p-4 bg-[#D95F63]/10 text-[#D95F63] border border-[#D95F63]/30 rounded-xl text-xs">{error}</div>;
-  }
-
-  if (!loading && elements.length === 0 && notice) {
-    return <div className="p-4 bg-[#E6A94A]/10 text-[#E6A94A] border border-[#E6A94A]/30 rounded-xl text-xs">{notice}</div>;
+    return (
+      <div className="p-4 bg-[var(--status-critical)]/10 text-[var(--status-critical)] border border-[var(--status-critical)]/30 rounded-xl text-xs space-y-1">
+        <div className="flex items-center space-x-2 font-bold">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Investigation Graph Error: {error}</span>
+        </div>
+        <p className="text-[11px] opacity-90 pl-6">
+          If live blockchain explorer endpoints are rate-limited or API keys are missing, try our verified offline demonstration address: <code className="bg-[var(--bg-secondary)] px-1 py-0.5 rounded font-mono text-[var(--text-primary)]">0xmock_wallet_a</code>.
+        </p>
+      </div>
+    );
   }
 
   const layout = {
@@ -408,6 +466,16 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
             </button>
           </div>
         </div>
+
+        {/* Informative Notice Banner (e.g. Zero Outgoing Paths Found) */}
+        {notice && (
+          <div className="p-3 bg-[var(--status-warning-bg)] border-b border-[var(--status-warning-border)] text-[var(--status-warning)] text-xs flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-[#E6A94A]" />
+              <span className="leading-snug">{notice}</span>
+            </div>
+          </div>
+        )}
 
         {/* Graph Canvas */}
         {loading ? (

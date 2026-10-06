@@ -54,10 +54,11 @@ const CHAIN_OPTIONS = [
 ];
 
 const SAMPLE_WALLETS = [
-  { label: 'ETH: 0xmock_wallet_a (5-Hop Trace)', addr: '0xmock_wallet_a', chain: 'ethereum' as const },
-  { label: 'ETH: Tornado.Cash (Mixer Hop)', addr: '0xd90e2f925da726b50c4ed8d0fb90ad053324f31b', chain: 'ethereum' as const },
-  { label: 'TRON: T9yD14Nj... (High-Velocity USDT)', addr: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', chain: 'tron' as const },
-  { label: 'BTC: bc1qar0s... (UTXO Co-Spend)', addr: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq', chain: 'bitcoin' as const },
+  { label: 'ETH Demo: 0xmock_wallet_a (Verified 5-Hop VASP Path)', addr: '0xmock_wallet_a', chain: 'ethereum' as const },
+  { label: 'BTC Live: bc1qm986... (Live Mainnet 15-Node Graph)', addr: 'bc1qm986eljmd9749cmrqsu3yudp7gg7e2ws9k09hg', chain: 'bitcoin' as const },
+  { label: 'ETH Demo: 0xmock_wallet_b (Intermediate Mule Peel)', addr: '0xmock_wallet_b', chain: 'ethereum' as const },
+  { label: 'ETH Demo: 0xmock_wallet_c (Pre-VASP Deposit)', addr: '0xmock_wallet_c', chain: 'ethereum' as const },
+  { label: 'TRON Live: High-Velocity Hub', addr: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', chain: 'tron' as const },
 ];
 
 const NewInvestigation: React.FC<NewInvestigationProps> = ({
@@ -70,7 +71,7 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
 }) => {
   const [address, setAddress] = useState('');
   const [chain, setChain] = useState<'ethereum' | 'tron' | 'bitcoin' | 'bsc' | 'auto'>('ethereum');
-  const [windowDays, setWindowDays] = useState(30);
+  const [windowDays, setWindowDays] = useState(90);
   const [hopLimit, setHopLimit] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,11 +157,16 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
       setWarnings(traced.warnings ?? []);
       if (traced.notice) {
         setNotice(traced.notice);
-        return;
       }
-      if ((traced.warnings ?? []).length === 0) navigate('/graph');
+      // Always transition directly into the Fund-Flow Graph workspace
+      navigate('/graph');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('502') || errMsg.includes('provider') || errMsg.includes('API key')) {
+        setError(`${errMsg} — External blockchain API rate-limit reached or key unconfigured. For instant guaranteed traversal, try '0xmock_wallet_a' above!`);
+      } else {
+        setError(errMsg);
+      }
     } finally {
       setLoading(false);
     }
