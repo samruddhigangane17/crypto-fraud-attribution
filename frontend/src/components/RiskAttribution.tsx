@@ -70,7 +70,7 @@ const RiskAttribution: React.FC<RiskAttributionProps> = ({ activeCase }) => {
               Deterministic 0–100 risk scoring and evidentiary confidence quantification.
             </p>
           </div>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-surface)] text-[#79E282] border border-[var(--border-color)]">
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-secondary)] text-[#79E282] border border-[var(--border-color)]">
             Deterministic Engine
           </span>
         </div>
@@ -93,7 +93,7 @@ const RiskAttribution: React.FC<RiskAttributionProps> = ({ activeCase }) => {
           </div>
         </div>
 
-        <div className="p-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl text-xs text-[var(--text-muted)] mb-6 leading-relaxed">
+        <div className="p-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-xs text-[var(--text-muted)] mb-6 leading-relaxed">
           <strong>Evidentiary Standard:</strong> Risk scores and attribution confidence are evaluated independently.
           A high-risk pathway may terminate at an unlabelled address, while verified exchange deposit labels indicate observed endpoints rather than definitive identity proof.
         </div>
@@ -110,7 +110,7 @@ const RiskAttribution: React.FC<RiskAttributionProps> = ({ activeCase }) => {
         </h3>
         <div className="space-y-3 mb-8">
           {risk.factors?.map((f: any) => (
-            <div key={f.factor_name} className="p-4 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]">
+            <div key={f.factor_name} className="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
               <div className="flex justify-between items-center mb-1">
                 <h4 className="text-xs font-bold text-[var(--text-primary)]">
                   {f.factor_name} {f.triggered ? <span className="text-[#D95F63] ml-1">· Triggered</span> : ''}
@@ -130,7 +130,7 @@ const RiskAttribution: React.FC<RiskAttributionProps> = ({ activeCase }) => {
         </h3>
         <div className="space-y-3 mb-6">
           {conf.factors?.map((f: any) => (
-            <div key={f.factor_name} className="p-4 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]">
+            <div key={f.factor_name} className="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
               <div className="flex justify-between items-center mb-1">
                 <h4 className="text-xs font-bold text-[var(--text-primary)]">{f.factor_name}</h4>
                 <span className="text-xs font-mono text-[#38BDF8]">

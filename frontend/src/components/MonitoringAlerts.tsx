@@ -97,7 +97,7 @@ const MonitoringAlerts: React.FC<MonitoringAlertsProps> = ({ activeCase }) => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-[var(--border-color)] pb-4 gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] flex items-center">
-              <Bell className="mr-3 text-[#79E282] h-6 w-6" />
+              <Bell className="mr-3 text-[var(--accent-primary)] h-6 w-6" />
               Real-Time Sentinel Alerts
             </h2>
             <p className="text-xs text-[var(--text-muted)] mt-1">
@@ -106,14 +106,14 @@ const MonitoringAlerts: React.FC<MonitoringAlertsProps> = ({ activeCase }) => {
           </div>
 
           {monitoring ? (
-            <span className="px-3 py-1.5 bg-[#79E282]/15 text-[#79E282] text-xs font-bold rounded-xl border border-[#79E282]/30 flex items-center shadow-sm">
+            <span className="px-3 py-1.5 bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] text-xs font-bold rounded-xl border border-[var(--accent-primary)]/30 flex items-center shadow-sm">
               <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
               Monitoring Active
             </span>
           ) : (
             <button
               onClick={enableMonitoring}
-              className="px-4 py-2 bg-[#79E282] text-[#0B0B0D] text-xs font-bold rounded-xl hover:bg-white transition-colors shadow-md"
+              className="px-4 py-2 bg-[var(--accent-primary)] text-[var(--bg-card)] text-xs font-bold rounded-xl hover:opacity-90 transition-opacity shadow-md"
             >
               Activate Wallet Sentinel
             </button>
