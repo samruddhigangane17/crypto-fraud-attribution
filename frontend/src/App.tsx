@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Activity, ShieldAlert, FileText, Share2, Search, LogOut, Clock, FolderOpen } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import {
+  Activity,
+  ShieldAlert,
+  FileText,
+  Share2,
+  Search,
+  LogOut,
+  Clock,
+  FolderOpen,
+  Sun,
+  Moon,
+  Sparkles,
+} from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { apiJson } from './lib/api';
 import type { Session } from '@supabase/supabase-js';
@@ -12,6 +24,8 @@ import RiskAttribution from './components/RiskAttribution';
 import RecoveryLayer from './components/RecoveryLayer';
 import MonitoringAlerts from './components/MonitoringAlerts';
 import EvidenceReport from './components/EvidenceReport';
+import CryptoTracerLogo from './components/CryptoTracerLogo';
+import Floating3DCoins from './components/Floating3DCoins';
 
 export interface CaseSummary {
   id: string;
@@ -27,8 +41,11 @@ export interface CaseSummary {
 }
 
 const STORAGE_KEY = 'crypto_fraud_active_case';
+const THEME_KEY = 'cryptotracer_theme';
 
 function Dashboard({ session }: { session: Session }) {
+  const location = useLocation();
+
   const [activeCase, setActiveCase] = useState<string | null>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) || null;
@@ -40,7 +57,31 @@ function Dashboard({ session }: { session: Session }) {
   const [loadingCases, setLoadingCases] = useState(false);
   const [dataSource, setDataSource] = useState<string | null>(null);
 
-  // Fetch recent cases and auto-restore the active case if needed
+  // Active chain selection shared with 3D coins hero
+  const [selectedChain, setSelectedChain] = useState<'ethereum' | 'tron' | 'bitcoin' | 'bsc'>('ethereum');
+  const [showHeroCoins, setShowHeroCoins] = useState(true);
+
+  // Light / Dark Theme State
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return (localStorage.getItem(THEME_KEY) as 'dark' | 'light') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  // Fetch recent cases and auto-restore active case
   const refreshCases = async () => {
     setLoadingCases(true);
     try {
@@ -52,7 +93,6 @@ function Dashboard({ session }: { session: Session }) {
         if (hasStored && stored) {
           setActiveCase(stored);
         } else {
-          // If no valid stored case exists, select the most recent completed case or the newest case
           const mostRecent = list.find((c) => c.status === 'completed') || list[0];
           if (mostRecent) {
             setActiveCase(mostRecent.id);
@@ -73,7 +113,6 @@ function Dashboard({ session }: { session: Session }) {
     refreshCases();
   }, []);
 
-  // Synchronize localStorage whenever activeCase changes
   useEffect(() => {
     if (activeCase) {
       try {
@@ -82,7 +121,7 @@ function Dashboard({ session }: { session: Session }) {
     }
   }, [activeCase]);
 
-  // Look up where the active case's data came from so mock data is always labelled
+  // Look up data source to label demo/mock data
   useEffect(() => {
     setDataSource(null);
     if (!activeCase) return;
@@ -95,64 +134,80 @@ function Dashboard({ session }: { session: Session }) {
     return () => clearInterval(t);
   }, [activeCase]);
 
+  const navLinks = [
+    { path: '/', label: 'New Investigation', icon: Search },
+    { path: '/graph', label: 'Fund-Flow Graph', icon: Share2 },
+    { path: '/risk', label: 'Risk & Attribution', icon: ShieldAlert },
+    { path: '/recovery', label: 'Recovery Layer', icon: Clock },
+    { path: '/alerts', label: 'Monitoring Alerts', icon: Activity },
+    { path: '/report', label: 'Evidence Report', icon: FileText },
+  ];
+
+  const handleSelectChainFromCoins = (chain: 'ethereum' | 'tron' | 'bitcoin' | 'bsc') => {
+    setSelectedChain(chain);
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100">
+    <div className="flex h-screen overflow-hidden bg-[var(--bg-main)] text-[var(--text-primary)]">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-800 flex items-center">
-            <ShieldAlert className="mr-2 text-indigo-600" />
-            CryptoFraud
-          </h1>
+      <aside className="w-64 bg-[var(--bg-card)] border-r border-[var(--border-color)] flex flex-col transition-colors duration-200">
+        <div className="p-4 border-b border-[var(--border-color)]">
+          <CryptoTracerLogo />
         </div>
-        <nav className="flex-1 p-4 space-y-2">
-          <Link to="/" className="flex items-center p-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-md">
-            <Search className="mr-3 h-5 w-5" />
-            New Investigation
-          </Link>
-          <Link to="/graph" className="flex items-center p-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-md">
-            <Share2 className="mr-3 h-5 w-5" />
-            Fund-Flow Graph
-          </Link>
-          <Link to="/risk" className="flex items-center p-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-md">
-            <ShieldAlert className="mr-3 h-5 w-5" />
-            Risk & Attribution
-          </Link>
-          <Link to="/recovery" className="flex items-center p-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-md">
-            <Clock className="mr-3 h-5 w-5" />
-            Recovery Layer
-          </Link>
-          <Link to="/alerts" className="flex items-center p-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-md">
-            <Activity className="mr-3 h-5 w-5" />
-            Monitoring
-          </Link>
-          <Link to="/report" className="flex items-center p-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-md">
-            <FileText className="mr-3 h-5 w-5" />
-            Evidence Report
-          </Link>
+
+        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
+          {navLinks.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-[#182124] text-[#79E282] border-l-4 border-[#79E282] shadow-sm font-semibold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
+                }`}
+              >
+                <Icon className={`mr-3 h-4 w-4 ${isActive ? 'text-[#79E282]' : 'text-[var(--text-muted)]'}`} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
-        
-        <div className="p-4 border-t border-gray-200">
-          <button 
+
+        {/* Sidebar Footer with Sign Out */}
+        <div className="p-3 border-t border-[var(--border-color)] space-y-2">
+          <button
             onClick={() => supabase.auth.signOut()}
-            className="flex items-center w-full p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
+            className="flex items-center w-full px-3 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[#D95F63] hover:bg-[#D95F63]/10 rounded-lg transition-colors"
           >
-            <LogOut className="mr-3 h-5 w-5" />
+            <LogOut className="mr-2.5 h-4 w-4" />
             Sign Out
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-          <h2 className="text-lg font-medium text-gray-800">Investigator Dashboard</h2>
+        {/* Top Navbar */}
+        <header className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-6 py-3.5 flex justify-between items-center transition-colors duration-200">
+          <div className="flex items-center space-x-3">
+            <h2 className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+              Investigator Intelligence Console
+            </h2>
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#79E282]/10 text-[#79E282] border border-[#79E282]/30">
+              v2.1 Real-Time
+            </span>
+          </div>
+
           <div className="flex items-center space-x-4">
-            {/* Case Selector Dropdown */}
+            {/* Active Case Selector */}
             <div className="flex items-center space-x-2">
-              <label htmlFor="case-select" className="text-xs font-medium text-gray-500 flex items-center">
-                <FolderOpen className="h-3.5 w-3.5 mr-1 text-indigo-600" />
-                Active Case:
+              <label htmlFor="case-select" className="text-xs font-medium text-[var(--text-muted)] flex items-center">
+                <FolderOpen className="h-3.5 w-3.5 mr-1.5 text-[#79E282]" />
+                Active Dossier:
               </label>
               {cases.length > 0 ? (
                 <select
@@ -162,7 +217,7 @@ function Dashboard({ session }: { session: Session }) {
                     const val = e.target.value;
                     if (val) setActiveCase(val);
                   }}
-                  className="bg-white border border-gray-300 text-gray-800 text-xs rounded-md px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm max-w-[280px] truncate font-mono"
+                  className="bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-[#79E282] focus:border-[#79E282] shadow-sm max-w-[270px] truncate font-mono"
                   title="Switch active investigation"
                 >
                   {!activeCase && <option value="">Select an investigation...</option>}
@@ -173,35 +228,70 @@ function Dashboard({ session }: { session: Session }) {
                   ))}
                 </select>
               ) : (
-                <div className="text-xs text-gray-500 italic">
-                  {loadingCases ? 'Loading cases...' : activeCase ? `${activeCase.slice(0, 8)}...` : 'No active case'}
+                <div className="text-xs text-[var(--text-muted)] italic">
+                  {loadingCases ? 'Loading...' : activeCase ? `${activeCase.slice(0, 8)}...` : 'None'}
                 </div>
               )}
             </div>
-            <div className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+
+            {/* 3D Hero Toggle Button */}
+            <button
+              onClick={() => setShowHeroCoins(!showHeroCoins)}
+              className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[#79E282] transition-colors"
+              title="Toggle 3D Coins Hero Banner"
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+
+            {/* Light / Dark Mode Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4 text-[#E6A94A]" /> : <Moon className="h-4 w-4 text-[#368980]" />}
+            </button>
+
+            {/* User identity pill */}
+            <div className="text-xs font-mono font-medium text-[#79E282] bg-[#79E282]/10 border border-[#79E282]/20 px-2.5 py-1 rounded-full truncate max-w-[180px]">
               {session.user.email}
             </div>
           </div>
         </header>
 
         {/* Standing Safe-Handling Advisory Banner */}
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs text-amber-900">
-          <div className="flex items-center space-x-2">
-            <span className="font-semibold px-1.5 py-0.5 bg-amber-500 text-white rounded text-[10px] tracking-wide uppercase">Advisory</span>
+        <div className="bg-[#E6A94A]/10 border-b border-[#E6A94A]/30 px-6 py-2 flex items-center justify-between text-xs text-[#E6A94A]">
+          <div className="flex items-center space-x-2.5">
+            <span className="font-bold px-1.5 py-0.5 bg-[#E6A94A] text-[#0B0B0D] rounded text-[9.5px] tracking-wider uppercase">
+              Law Enforcement Advisory
+            </span>
             <span>
-              Official recovery processes <strong>never</strong> ask for private keys, seed phrases, OTPs, or upfront fees. Unsolicited "recovery agents" are scammers.
+              Official recovery processes <strong>never</strong> ask victims for private keys, seed phrases, OTPs, or upfront fees. Unsolicited "recovery agents" are fraudulent.
             </span>
           </div>
-          <span className="text-amber-700 font-medium hidden md:inline">Golden Hour SOP</span>
+          <span className="text-[#E6A94A]/80 font-bold hidden md:inline tracking-wider uppercase text-[10px]">
+            SOP Chain of Custody
+          </span>
         </div>
 
+        {/* Mock/Demo Notification Banner */}
         {dataSource === 'mock' && (
-          <div className="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2">
-            <strong>DEMO DATA:</strong> this case uses built-in mock transactions, not live blockchain data.
-            Addresses, exchange labels and amounts are fake.
+          <div className="bg-[#E6A94A]/15 border-b border-[#E6A94A]/40 text-[#E6A94A] text-xs px-6 py-1.5 flex items-center space-x-2">
+            <span className="font-bold uppercase tracking-wider text-[10px] bg-[#E6A94A]/30 px-1 py-0.5 rounded">Demo Data</span>
+            <span>This dossier is powered by deterministic mock blockchain transactions for hermetic demonstration.</span>
           </div>
         )}
-        <main className="flex-1 overflow-auto p-6">
+
+        {/* Main Content Router */}
+        <main className="flex-1 overflow-auto p-6 bg-[var(--bg-main)] transition-colors duration-200">
+          {/* Optional Collapsible 3D Crypto Coins Hero Section */}
+          {showHeroCoins && location.pathname === '/' && (
+            <Floating3DCoins
+              onSelectChain={handleSelectChainFromCoins}
+              activeChain={selectedChain}
+            />
+          )}
+
           <Routes>
             <Route
               path="/"
@@ -211,6 +301,8 @@ function Dashboard({ session }: { session: Session }) {
                   activeCase={activeCase}
                   cases={cases}
                   onCaseCreated={refreshCases}
+                  selectedChain={selectedChain}
+                  onSelectChain={setSelectedChain}
                 />
               }
             />
@@ -246,7 +338,14 @@ function App() {
   }, []);
 
   if (loading) {
-    return <div className="h-screen flex items-center justify-center bg-gray-50">Loading application...</div>;
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#0B0B0D] text-[#79E282] font-mono text-sm">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="h-8 w-8 border-2 border-[#79E282] border-t-transparent rounded-full animate-spin" />
+          <span>INITIALIZING CRYPTOTRACER FORENSIC SUITE...</span>
+        </div>
+      </div>
+    );
   }
 
   if (!session) {
