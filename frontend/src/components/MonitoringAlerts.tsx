@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, ShieldAlert, CheckCircle } from 'lucide-react';
+import { Bell, ShieldAlert, CheckCircle, Activity } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { apiJson } from '../lib/api';
 
@@ -8,10 +8,10 @@ interface MonitoringAlertsProps {
 }
 
 const severityStyles: Record<string, string> = {
-  INFO: 'bg-blue-50 border-blue-200 text-blue-900',
-  WARNING: 'bg-yellow-50 border-yellow-200 text-yellow-900',
-  HIGH: 'bg-orange-50 border-orange-200 text-orange-900',
-  CRITICAL: 'bg-red-50 border-red-200 text-red-900',
+  INFO: 'bg-[#38BDF8]/10 border-[#38BDF8]/30 text-[#38BDF8]',
+  WARNING: 'bg-[#E6A94A]/10 border-[#E6A94A]/30 text-[#E6A94A]',
+  HIGH: 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]',
+  CRITICAL: 'bg-[#D95F63]/15 border-[#D95F63]/40 text-[#D95F63]',
 };
 
 const MonitoringAlerts: React.FC<MonitoringAlertsProps> = ({ activeCase }) => {
@@ -73,53 +73,86 @@ const MonitoringAlerts: React.FC<MonitoringAlertsProps> = ({ activeCase }) => {
     }
   };
 
-  if (!activeCase) return <div className="p-8 text-center text-gray-500">No active case selected.</div>;
-  if (loading) return <div>Loading alerts...</div>;
+  if (!activeCase) {
+    return (
+      <div className="p-12 text-center text-[var(--text-muted)] bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] max-w-xl mx-auto my-12">
+        <Activity className="h-10 w-10 text-[#79E282] mx-auto mb-3" />
+        <h3 className="text-base font-bold text-[var(--text-primary)]">No Active Case Selected</h3>
+        <p className="text-xs mt-1">Please select an investigation from the header console to view Monitoring Alerts.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="p-12 text-center text-xs font-mono text-[#79E282] bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] max-w-xl mx-auto my-12">
+        CONNECTING REAL-TIME ALERT MONITORING STREAM...
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-            <Bell className="mr-3 text-indigo-600" />
-            Monitoring and Alerts
-          </h2>
+      <div className="bg-[var(--bg-card)] p-8 rounded-2xl shadow-xl border border-[var(--border-color)] transition-colors">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-[var(--border-color)] pb-4 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] flex items-center">
+              <Bell className="mr-3 text-[#79E282] h-6 w-6" />
+              Real-Time Sentinel Alerts
+            </h2>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Automated notifications for high-risk threshold breaches, mixer interactions, and VASP deposits.
+            </p>
+          </div>
+
           {monitoring ? (
-            <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full flex items-center">
-              <CheckCircle className="w-4 h-4 mr-1" />
-              Monitoring enabled
+            <span className="px-3 py-1.5 bg-[#79E282]/15 text-[#79E282] text-xs font-bold rounded-xl border border-[#79E282]/30 flex items-center shadow-sm">
+              <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+              Monitoring Active
             </span>
           ) : (
             <button
               onClick={enableMonitoring}
-              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+              className="px-4 py-2 bg-[#79E282] text-[#0B0B0D] text-xs font-bold rounded-xl hover:bg-white transition-colors shadow-md"
             >
-              Enable monitoring
+              Activate Wallet Sentinel
             </button>
           )}
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm">{error}</div>
+          <div className="mb-4 p-3 bg-[#D95F63]/10 text-[#D95F63] border border-[#D95F63]/30 rounded-xl text-xs">{error}</div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {alerts.length === 0 ? (
-            <div className="text-gray-500 text-center py-8">No alerts generated yet.</div>
+            <div className="text-[var(--text-muted)] text-center py-12 text-xs">
+              No active security alerts generated for this investigation. All observed transfers remain within baseline parameters.
+            </div>
           ) : (
             alerts.map((alert: any) => (
               <div
                 key={alert.id}
-                className={`flex p-4 rounded-lg border ${severityStyles[alert.severity] ?? severityStyles.INFO}`}
+                className={`flex p-4 rounded-xl border ${severityStyles[alert.severity] ?? severityStyles.INFO}`}
               >
-                <ShieldAlert className="mr-4 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold">
-                    {alert.title ?? String(alert.alert_type ?? '').replace(/_/g, ' ').toUpperCase()}
-                    {alert.severity ? ` · ${alert.severity}` : ''}
-                  </h4>
-                  <p className="text-sm mt-1">{alert.message}</p>
-                  {alert.tx_hash && <p className="text-xs mt-1 opacity-75 break-all">Tx: {alert.tx_hash}</p>}
+                <ShieldAlert className="mr-3.5 flex-shrink-0 h-5 w-5 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-xs uppercase tracking-wider">
+                      {alert.title ?? String(alert.alert_type ?? '').replace(/_/g, ' ')}
+                    </h4>
+                    {alert.severity && (
+                      <span className="text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-[var(--bg-card)]">
+                        {alert.severity}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs mt-1 text-[var(--text-primary)] leading-relaxed">{alert.message}</p>
+                  {alert.tx_hash && (
+                    <p className="text-[10px] mt-1.5 font-mono text-[var(--text-muted)] break-all">
+                      Tx: {alert.tx_hash}
+                    </p>
+                  )}
                 </div>
               </div>
             ))

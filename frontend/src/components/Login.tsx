@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ShieldAlert, Lock, Mail } from 'lucide-react';
+import { Lock, Mail } from 'lucide-react';
+import CryptoTracerLogo from './CryptoTracerLogo';
 
 export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -15,7 +16,7 @@ export default function Login() {
     setLoading(true);
     setError(null);
     setMessage(null);
-    
+
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({
         email,
@@ -42,41 +43,45 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center text-indigo-600">
-          <ShieldAlert className="h-12 w-12" />
-        </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          {isSignUp ? 'Create an Investigator Account' : 'Sign in to Investigator Portal'}
+    <div className="min-h-screen bg-[#0B0B0D] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-['Montserrat']">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
+        <CryptoTracerLogo className="mb-4 scale-110" />
+        <h2 className="mt-4 text-center text-2xl font-bold tracking-tight text-[#E8EEEB]">
+          {isSignUp ? 'Create Investigator Credential' : 'Sign in to Forensic Console'}
         </h2>
+        <p className="mt-1 text-xs text-[#899695] text-center">
+          Cryptographically authenticated workspace for cryptocurrency fraud attribution
+        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-200">
-          <form className="space-y-6" onSubmit={handleAuth}>
+        <div className="bg-[#11171A] py-8 px-6 shadow-2xl rounded-2xl border border-[#243338] sm:px-10">
+          <form className="space-y-5" onSubmit={handleAuth}>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <div className="bg-[#D95F63]/10 border border-[#D95F63]/30 text-[#D95F63] px-3.5 py-2.5 rounded-xl text-xs" role="alert">
                 <span className="block sm:inline">{error}</span>
               </div>
             )}
-            
+
             {message && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative" role="alert">
+              <div className="bg-[#79E282]/10 border border-[#79E282]/30 text-[#79E282] px-3.5 py-2.5 rounded-xl text-xs" role="alert">
                 <span className="block sm:inline">{message}</span>
               </div>
             )}
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email address</label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#899695]">
+                Officer / Investigator Email
+              </label>
+              <div className="mt-1.5 relative rounded-xl shadow-inner">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Mail className="h-4 w-4 text-[#899695]" />
                 </div>
                 <input
                   type="email"
                   required
-                  className="pl-10 w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="pl-10 w-full bg-[#182124] border border-[#243338] rounded-xl p-2.5 text-xs text-[#E8EEEB] focus:ring-2 focus:ring-[#79E282] focus:border-[#79E282] font-mono shadow-inner"
+                  placeholder="investigator@agency.gov"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -84,15 +89,17 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Password</label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#899695]">
+                Security Password
+              </label>
+              <div className="mt-1.5 relative rounded-xl shadow-inner">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-[#899695]" />
                 </div>
                 <input
                   type="password"
                   required
-                  className="pl-10 w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="pl-10 w-full bg-[#182124] border border-[#243338] rounded-xl p-2.5 text-xs text-[#E8EEEB] focus:ring-2 focus:ring-[#79E282] focus:border-[#79E282] font-mono shadow-inner"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -102,19 +109,19 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 transition-colors"
+              className="w-full flex justify-center py-3 px-4 rounded-xl shadow-lg text-xs font-bold text-[#0B0B0D] bg-[#79E282] hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#79E282] disabled:bg-[#368980]/40 disabled:text-[#899695] transition-colors"
             >
-              {loading ? (isSignUp ? 'Signing up...' : 'Signing in...') : (isSignUp ? 'Sign up' : 'Sign in')}
+              {loading ? (isSignUp ? 'Registering Credential...' : 'Authenticating Session...') : (isSignUp ? 'Create Account' : 'Authenticate Session')}
             </button>
           </form>
 
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-[#1C272A]" />
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or</span>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-2 bg-[#11171A] text-[#899695] uppercase tracking-wider text-[10px]">Or</span>
               </div>
             </div>
 
@@ -126,9 +133,9 @@ export default function Login() {
                   setError(null);
                   setMessage(null);
                 }}
-                className="w-full flex justify-center py-2 px-4 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                className="w-full flex justify-center py-2.5 px-4 border border-[#243338] rounded-xl text-xs font-medium text-[#899695] bg-[#182124] hover:text-[#79E282] hover:bg-[#1F2B2F] transition-colors"
               >
-                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+                {isSignUp ? 'Already have an authenticated account? Sign in' : "Register new investigator account"}
               </button>
             </div>
           </div>

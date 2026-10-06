@@ -1,7 +1,155 @@
 @import "tailwindcss";
 
 @layer base {
-  html, body, #root {
-    @apply h-full bg-gray-50 text-gray-900 m-0 p-0;
+  :root,
+  :root[data-theme="dark"] {
+    --bg-main: #0B0B0D;
+    --bg-card: #11171A;
+    --bg-surface: #182124;
+    --bg-hover: #1F2B2F;
+    --border-color: #243338;
+    --border-subtle: #1C272A;
+    --accent-primary: #79E282;
+    --accent-secondary: #368980;
+    --text-primary: #E8EEEB;
+    --text-muted: #899695;
+    --warning: #E6A94A;
+    --critical: #D95F63;
+    --info: #38BDF8;
+    --shadow-glow: rgba(121, 226, 130, 0.15);
   }
+
+  :root[data-theme="light"] {
+    --bg-main: #F3F8F5;
+    --bg-card: #FFFFFF;
+    --bg-surface: #E6F0EC;
+    --bg-hover: #DCE8E3;
+    --border-color: #CFE0D9;
+    --border-subtle: #DCE7E2;
+    --accent-primary: #16A34A;
+    --accent-secondary: #0D9488;
+    --text-primary: #0F171A;
+    --text-muted: #526361;
+    --warning: #D97706;
+    --critical: #DC2626;
+    --info: #0284C7;
+    --shadow-glow: rgba(22, 163, 74, 0.12);
+  }
+
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+}
+
+/* 3D Coin & Perspective Animations */
+@keyframes coin-spin-slow {
+  0% {
+    transform: rotateY(0deg) rotateX(12deg);
+  }
+  50% {
+    transform: rotateY(180deg) rotateX(-8deg);
+  }
+  100% {
+    transform: rotateY(360deg) rotateX(12deg);
+  }
+}
+
+@keyframes float-subtle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.animate-coin-spin {
+  animation: coin-spin-slow 10s infinite linear;
+}
+
+.animate-coin-spin-fast {
+  animation: coin-spin-slow 6s infinite linear;
+}
+
+.animate-float-1 {
+  animation: float-subtle 4s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: float-subtle 4.5s ease-in-out infinite 0.75s;
+}
+
+.animate-float-3 {
+  animation: float-subtle 5s ease-in-out infinite 1.5s;
+}
+
+.animate-float-4 {
+  animation: float-subtle 4.2s ease-in-out infinite 2.25s;
+}
+
+/* 3D perspective wrapper */
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Isometric 3D plane view for graph */
+.graph-3d-plane {
+  transform: perspective(1000px) rotateX(22deg) scale(0.96);
+  transform-origin: center 35%;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.45);
+}
+
+.graph-2d-plane {
+  transform: none;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }

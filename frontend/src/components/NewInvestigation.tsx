@@ -2,7 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson, API_BASE } from '../lib/api';
 import { supabase } from '../lib/supabase';
-import { History, Check, ArrowRight, RefreshCw, Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  History,
+  Check,
+  ArrowRight,
+  RefreshCw,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  Shield,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
 import type { CaseSummary } from '../App';
 
 interface BulkRowError {
@@ -30,16 +42,34 @@ interface NewInvestigationProps {
   activeCase: string | null;
   cases?: CaseSummary[];
   onCaseCreated?: () => void;
+  selectedChain?: 'ethereum' | 'tron' | 'bitcoin' | 'bsc';
+  onSelectChain?: (chain: 'ethereum' | 'tron' | 'bitcoin' | 'bsc') => void;
 }
+
+const CHAIN_OPTIONS = [
+  { id: 'ethereum', name: 'Ethereum', ticker: 'ETH', color: 'from-[#6366F1] to-[#312E81]', border: '#6366F1', text: '#818CF8' },
+  { id: 'tron', name: 'TRON', ticker: 'TRX', color: 'from-[#EF4444] to-[#7F1D1D]', border: '#EF4444', text: '#F87171' },
+  { id: 'bitcoin', name: 'Bitcoin', ticker: 'BTC', color: 'from-[#F59E0B] to-[#78350F]', border: '#F59E0B', text: '#FBBF24' },
+  { id: 'bsc', name: 'BNB Chain', ticker: 'BSC', color: 'from-[#EAB308] to-[#713F12]', border: '#EAB308', text: '#FACC15' },
+];
+
+const SAMPLE_WALLETS = [
+  { label: 'ETH: 0xmock_wallet_a (5-Hop Trace)', addr: '0xmock_wallet_a', chain: 'ethereum' as const },
+  { label: 'ETH: Tornado.Cash (Mixer Hop)', addr: '0xd90e2f925da726b50c4ed8d0fb90ad053324f31b', chain: 'ethereum' as const },
+  { label: 'TRON: T9yD14Nj... (High-Velocity USDT)', addr: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', chain: 'tron' as const },
+  { label: 'BTC: bc1qar0s... (UTXO Co-Spend)', addr: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq', chain: 'bitcoin' as const },
+];
 
 const NewInvestigation: React.FC<NewInvestigationProps> = ({
   setActiveCase,
   activeCase,
   cases = [],
   onCaseCreated,
+  selectedChain,
+  onSelectChain,
 }) => {
   const [address, setAddress] = useState('');
-  const [chain, setChain] = useState('ethereum');
+  const [chain, setChain] = useState<'ethereum' | 'tron' | 'bitcoin' | 'bsc' | 'auto'>('ethereum');
   const [windowDays, setWindowDays] = useState(30);
   const [hopLimit, setHopLimit] = useState(5);
   const [loading, setLoading] = useState(false);
@@ -57,6 +87,13 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const navigate = useNavigate();
+
+  // Sync chain if selectedChain passed from 3D coins hero
+  useEffect(() => {
+    if (selectedChain) {
+      setChain(selectedChain);
+    }
+  }, [selectedChain]);
 
   // Keep recent cases in sync with prop, or fetch if prop is empty
   useEffect(() => {
@@ -81,6 +118,17 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
     }
   };
 
+  const handleSelectChain = (c: 'ethereum' | 'tron' | 'bitcoin' | 'bsc') => {
+    setChain(c);
+    onSelectChain?.(c);
+  };
+
+  const handleQuickFill = (sample: typeof SAMPLE_WALLETS[number]) => {
+    setAddress(sample.addr);
+    setChain(sample.chain);
+    onSelectChain?.(sample.chain);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -101,15 +149,14 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
           start_time: startTime,
         }),
       });
-      // Only make this the active case once tracing succeeded, so the other pages never open a
-      // case that has no results (which used to surface as confusing 404s).
+
       setActiveCase(created.id);
       onCaseCreated?.();
       fetchRecentCases();
       setWarnings(traced.warnings ?? []);
       if (traced.notice) {
         setNotice(traced.notice);
-        return; // stay here: nothing to show on the graph
+        return;
       }
       if ((traced.warnings ?? []).length === 0) navigate('/graph');
     } catch (err) {
@@ -143,7 +190,6 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      // Do NOT manually set Content-Type header; let the browser set multipart boundary
       const res = await fetch(`${API_BASE}/api/v1/cases/bulk`, {
         method: 'POST',
         headers,
@@ -155,16 +201,13 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
         try {
           const body = await res.json();
           errorDetail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
-        } catch {
-          /* fallback to statusText */
-        }
+        } catch {}
         throw new Error(`${res.status}: ${errorDetail}`);
       }
 
       const result: BulkUploadResponse = await res.json();
       setBulkResponse(result);
 
-      // If at least one case was successfully ingested, refresh cases and notify parent
       if (result.successfully_ingested > 0) {
         onCaseCreated?.();
         fetchRecentCases();
@@ -182,123 +225,221 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
 
   const getChainBadgeStyle = (chainName: string) => {
     const c = (chainName || '').toLowerCase();
-    if (c === 'ethereum' || c === 'eth') return 'bg-blue-100 text-blue-800 border-blue-200';
-    if (c === 'bitcoin' || c === 'btc') return 'bg-amber-100 text-amber-800 border-amber-200';
-    if (c === 'tron' || c === 'trx') return 'bg-red-100 text-red-800 border-red-200';
-    if (c === 'bsc') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    return 'bg-gray-100 text-gray-800 border-gray-200';
+    if (c === 'ethereum' || c === 'eth') return 'bg-[#6366F1]/10 text-[#818CF8] border-[#6366F1]/30';
+    if (c === 'bitcoin' || c === 'btc') return 'bg-[#F59E0B]/10 text-[#FBBF24] border-[#F59E0B]/30';
+    if (c === 'tron' || c === 'trx') return 'bg-[#EF4444]/10 text-[#F87171] border-[#EF4444]/30';
+    if (c === 'bsc') return 'bg-[#EAB308]/10 text-[#FACC15] border-[#EAB308]/30';
+    return 'bg-[#182124] text-[var(--text-muted)] border-[var(--border-color)]';
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* New Investigation Form */}
-      <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">New Investigation</h2>
+    <div id="investigation-form" className="max-w-4xl mx-auto space-y-8">
+      {/* Primary Investigation Setup Card */}
+      <div className="bg-[var(--bg-card)] p-8 rounded-2xl shadow-xl border border-[var(--border-color)] transition-colors duration-200">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--border-color)]">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] flex items-center">
+              <Shield className="mr-3 h-6 w-6 text-[#79E282]" />
+              Initiate Fraud Investigation
+            </h2>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Submit reported fraudulent wallets to reconstruct forward fund dispersion, taint flow, and VASP off-ramps.
+            </p>
+          </div>
+          <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[#182124] text-[#79E282] border border-[#243338]">
+            Automated Traversal
+          </span>
+        </div>
+
         {activeCase && (
-          <div className="mb-6 p-4 bg-green-50 text-green-700 border border-green-200 rounded-md flex items-center justify-between">
-            <span className="font-mono text-sm">Active Case: {activeCase}</span>
+          <div className="mb-6 p-4 bg-[#79E282]/10 text-[#79E282] border border-[#79E282]/30 rounded-xl flex items-center justify-between">
+            <span className="font-mono text-xs">
+              Active Investigation Loaded: <strong className="underline">{activeCase}</strong>
+            </span>
             <button
               onClick={() => navigate('/graph')}
-              className="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 flex items-center"
+              className="text-xs bg-[#79E282] text-[#0B0B0D] font-bold px-3 py-1.5 rounded-lg hover:bg-white flex items-center transition-colors shadow-sm"
             >
-              View Fund-Flow Graph <ArrowRight className="h-3 w-3 ml-1" />
+              Inspect Graph <ArrowRight className="h-3 w-3 ml-1.5" />
             </button>
           </div>
         )}
+
         {notice && (
-          <div className="mb-6 p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-md">{notice}</div>
+          <div className="mb-6 p-4 bg-[#E6A94A]/10 text-[#E6A94A] border border-[#E6A94A]/30 rounded-xl text-xs">
+            {notice}
+          </div>
         )}
+
         {warnings.length > 0 && (
-          <div className="mb-6 p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-md space-y-1">
+          <div className="mb-6 p-4 bg-[#E6A94A]/10 text-[#E6A94A] border border-[#E6A94A]/30 rounded-xl space-y-1 text-xs">
             {warnings.map((w) => (
               <div key={w}>{w}</div>
             ))}
           </div>
         )}
+
         {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-md">{error}</div>
+          <div className="mb-6 p-4 bg-[#D95F63]/10 text-[#D95F63] border border-[#D95F63]/30 rounded-xl text-xs">
+            {error}
+          </div>
         )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Target Chain Selector Cards */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Suspicious Wallet Address</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2.5">
+              Target Blockchain Network
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+              {CHAIN_OPTIONS.map((opt) => {
+                const isSelected = chain === opt.id;
+                return (
+                  <button
+                    type="button"
+                    key={opt.id}
+                    onClick={() => handleSelectChain(opt.id as any)}
+                    className={`p-3 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-[#79E282] bg-[#182124] shadow-md ring-1 ring-[#79E282]'
+                        : 'border-[var(--border-color)] bg-[var(--bg-surface)] hover:border-[#368980]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-[var(--text-primary)]">{opt.name}</span>
+                      <span
+                        className="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold"
+                        style={{ color: opt.text, backgroundColor: `${opt.border}20` }}
+                      >
+                        {opt.ticker}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-[var(--text-muted)]">
+                      {isSelected ? 'Active Target' : 'Click to select'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Wallet Address Input */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="wallet-address-input" className="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                Reported Incident Wallet Address
+              </label>
+              <span className="text-[10px] text-[#79E282]">Supports BTC, ETH, TRX, BSC</span>
+            </div>
             <input
+              id="wallet-address-input"
               type="text"
               required
-              className="w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-              placeholder="0x..."
+              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-3 focus:ring-2 focus:ring-[#79E282] focus:border-[#79E282] font-mono text-sm text-[var(--text-primary)] transition-all shadow-inner"
+              placeholder="e.g. 0xmock_wallet_a or T9yD14Nj... or bc1q..."
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Demo address for offline mock data: <code className="text-indigo-600 font-mono">0xmock_wallet_a</code>
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Blockchain</label>
-            <select
-              className="w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
-              value={chain}
-              onChange={(e) => setChain(e.target.value)}
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="ethereum">Ethereum (ETH)</option>
-              <option value="bitcoin">Bitcoin (BTC)</option>
-              <option value="tron">TRON (TRX)</option>
-              <option value="bsc">BNB Smart Chain (BSC)</option>
-            </select>
+
+            {/* Quick Fill Sample Wallets */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-[var(--text-muted)] mr-1 flex items-center">
+                <Sparkles className="h-3 w-3 mr-1 text-[#79E282]" /> Quick Test:
+              </span>
+              {SAMPLE_WALLETS.map((s, idx) => (
+                <button
+                  type="button"
+                  key={idx}
+                  onClick={() => handleQuickFill(s)}
+                  className="text-[10px] font-mono px-2 py-1 rounded-md bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[#79E282] hover:bg-[#1F2B2F] border border-[var(--border-color)] transition-colors"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Time Window (days)</label>
+          {/* Trace Parameters: Time Window & Hop Limit */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-[var(--bg-surface)] p-3.5 rounded-xl border border-[var(--border-color)]">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                Analysis Lookback Window (Days)
+              </label>
               <input
                 type="number"
                 min={1}
+                max={365}
                 value={windowDays}
                 onChange={(e) => setWindowDays(Number(e.target.value) || 1)}
-                className="w-full border border-gray-300 rounded-md p-2"
+                className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg p-2 text-sm font-mono text-[var(--text-primary)] focus:ring-2 focus:ring-[#79E282]"
               />
+              <span className="text-[10px] text-[var(--text-muted)] mt-1 block">Examines transactions within this timeframe.</span>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Hop Limit</label>
+
+            <div className="bg-[var(--bg-surface)] p-3.5 rounded-xl border border-[var(--border-color)]">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                Forward Traversal Hop Depth (1–10)
+              </label>
               <input
                 type="number"
                 min={1}
                 max={10}
                 value={hopLimit}
                 onChange={(e) => setHopLimit(Number(e.target.value) || 1)}
-                className="w-full border border-gray-300 rounded-md p-2"
+                className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg p-2 text-sm font-mono text-[var(--text-primary)] focus:ring-2 focus:ring-[#79E282]"
               />
+              <span className="text-[10px] text-[var(--text-muted)] mt-1 block">Maximum sequential transfers traced from source.</span>
             </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white p-3 rounded-md font-medium hover:bg-indigo-700 disabled:bg-indigo-300 transition-colors shadow-sm"
+            className="w-full bg-[#79E282] text-[#0B0B0D] py-3.5 rounded-xl font-bold hover:bg-white disabled:bg-[#368980]/40 disabled:text-[#899695] transition-all duration-200 shadow-lg shadow-[#79E282]/10 flex items-center justify-center space-x-2"
           >
-            {loading ? 'Starting Investigation...' : 'Start Investigation'}
+            {loading ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin text-[#0B0B0D]" />
+                <span>Traversing Transaction Pathways...</span>
+              </>
+            ) : (
+              <>
+                <Layers className="h-4 w-4" />
+                <span>Execute Multi-Hop Forward Trace</span>
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </>
+            )}
           </button>
         </form>
       </div>
 
-      {/* Bulk CSV Upload Section */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center space-x-2 mb-4 pb-2 border-b border-gray-100">
-          <FileSpreadsheet className="h-5 w-5 text-indigo-600" />
-          <h3 className="text-lg font-bold text-gray-800">Bulk CSV Upload</h3>
-          <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
-            NCRP / SAHYOG
+      {/* Bulk CSV Batch Ingestion Section */}
+      <div className="bg-[var(--bg-card)] p-6 rounded-2xl shadow-xl border border-[var(--border-color)] transition-colors duration-200">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border-color)]">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-lg bg-[#368980]/15 text-[#79E282]">
+              <FileSpreadsheet className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-[var(--text-primary)]">Bulk CSV Intake Protocol</h3>
+              <p className="text-xs text-[var(--text-muted)]">NCRP / SAHYOG Automated Multi-Case Batch Ingestion</p>
+            </div>
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/30">
+            Batch API
           </span>
         </div>
-        <p className="text-xs text-gray-500 mb-4">
-          Batch ingest multiple suspect wallet addresses for multi-hop tracing. Expected CSV columns:
-          <code className="text-indigo-600 ml-1 font-mono">complaint_ref, wallet_address, chain, amount, asset</code>
+
+        <p className="text-xs text-[var(--text-muted)] mb-4 leading-relaxed">
+          Batch ingest suspect wallet addresses directly into the forensic pipeline. Expected CSV format:
+          <code className="text-[#79E282] ml-1 font-mono text-[11px] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded">
+            complaint_ref, wallet_address, chain, amount, asset
+          </code>
         </p>
 
         {bulkError && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm flex items-start space-x-2">
-            <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+          <div className="mb-4 p-3 bg-[#D95F63]/10 text-[#D95F63] border border-[#D95F63]/30 rounded-xl text-xs flex items-start space-x-2">
+            <AlertCircle className="h-4 w-4 text-[#D95F63] shrink-0 mt-0.5" />
             <span>{bulkError}</span>
           </div>
         )}
@@ -306,46 +447,46 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
         {bulkResponse && (
           <div className="mb-4 space-y-3">
             <div
-              className={`p-3 rounded-md text-sm border flex items-center justify-between ${
+              className={`p-3 rounded-xl text-xs border flex items-center justify-between ${
                 bulkResponse.failed_count === 0
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-amber-50 text-amber-800 border-amber-200'
+                  ? 'bg-[#79E282]/10 text-[#79E282] border-[#79E282]/30'
+                  : 'bg-[#E6A94A]/10 text-[#E6A94A] border-[#E6A94A]/30'
               }`}
             >
               <div className="flex items-center space-x-2">
                 <CheckCircle2
-                  className={`h-5 w-5 ${bulkResponse.failed_count === 0 ? 'text-emerald-600' : 'text-amber-600'}`}
+                  className={`h-4 w-4 ${bulkResponse.failed_count === 0 ? 'text-[#79E282]' : 'text-[#E6A94A]'}`}
                 />
-                <span className="font-medium">
-                  Upload completed: {bulkResponse.successfully_ingested} of {bulkResponse.total_rows_read} rows ingested.
+                <span className="font-semibold">
+                  Batch Ingest Completed: {bulkResponse.successfully_ingested} of {bulkResponse.total_rows_read} rows processed.
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
-                <div className="text-xs text-gray-500 font-medium">Total Rows</div>
-                <div className="text-lg font-bold text-gray-800">{bulkResponse.total_rows_read}</div>
+              <div className="p-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl">
+                <div className="text-[11px] text-[var(--text-muted)] font-medium">Total Rows</div>
+                <div className="text-lg font-bold text-[var(--text-primary)] font-mono">{bulkResponse.total_rows_read}</div>
               </div>
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md">
-                <div className="text-xs text-emerald-600 font-medium">Successfully Ingested</div>
-                <div className="text-lg font-bold text-emerald-700">{bulkResponse.successfully_ingested}</div>
+              <div className="p-3 bg-[#79E282]/10 border border-[#79E282]/20 rounded-xl">
+                <div className="text-[11px] text-[#79E282] font-medium">Ingested</div>
+                <div className="text-lg font-bold text-[#79E282] font-mono">{bulkResponse.successfully_ingested}</div>
               </div>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-                <div className="text-xs text-amber-600 font-medium">Failed Rows</div>
-                <div className="text-lg font-bold text-amber-700">{bulkResponse.failed_count}</div>
+              <div className="p-3 bg-[#E6A94A]/10 border border-[#E6A94A]/20 rounded-xl">
+                <div className="text-[11px] text-[#E6A94A] font-medium">Exceptions</div>
+                <div className="text-lg font-bold text-[#E6A94A] font-mono">{bulkResponse.failed_count}</div>
               </div>
             </div>
 
             {bulkResponse.errors && bulkResponse.errors.length > 0 && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-800 space-y-1">
-                <div className="font-semibold flex items-center mb-1 text-red-900">
-                  <AlertCircle className="h-4 w-4 mr-1 text-red-600 inline" />
-                  Row Validation Errors ({bulkResponse.errors.length}):
+              <div className="p-3 bg-[#D95F63]/10 border border-[#D95F63]/30 rounded-xl text-xs text-[#D95F63] space-y-1">
+                <div className="font-bold flex items-center mb-1">
+                  <AlertCircle className="h-4 w-4 mr-1 inline" />
+                  Validation Exceptions ({bulkResponse.errors.length}):
                 </div>
-                <ul className="list-disc list-inside space-y-0.5 max-h-32 overflow-y-auto">
+                <ul className="list-disc list-inside space-y-0.5 max-h-32 overflow-y-auto font-mono text-[11px]">
                   {bulkResponse.errors.map((err, idx) => (
-                    <li key={idx} className="font-mono text-[11px]">
+                    <li key={idx}>
                       Row {err.row_index} ({err.wallet_address || 'empty'}): {err.error}
                     </li>
                   ))}
@@ -356,7 +497,7 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
         )}
 
         <form onSubmit={handleBulkUpload} className="space-y-4">
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
             <input
               ref={fileInputRef}
               type="file"
@@ -368,29 +509,31 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
                 setBulkError(null);
                 setBulkResponse(null);
               }}
-              className="block w-full text-xs text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+              className="block w-full text-xs text-[var(--text-muted)] file:mr-3 file:py-2 file:px-3.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#182124] file:text-[#79E282] hover:file:bg-[#1F2B2F] border border-[var(--border-color)] bg-[var(--bg-surface)] rounded-xl p-2 focus:outline-none cursor-pointer disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={bulkLoading || !selectedFile}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors shrink-0"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-[#0B0B0D] bg-[#79E282] hover:bg-white disabled:bg-[#368980]/40 disabled:text-[#899695] transition-colors shrink-0 shadow-sm"
             >
-              <Upload className="h-4 w-4 mr-1.5" />
-              {bulkLoading ? 'Uploading CSV...' : 'Upload CSV'}
+              <Upload className="h-3.5 w-3.5 mr-1.5" />
+              {bulkLoading ? 'Processing Batch...' : 'Upload & Parse CSV'}
             </button>
           </div>
         </form>
       </div>
 
-      {/* Recent Investigations Section */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
-          <div className="flex items-center space-x-2">
-            <History className="h-5 w-5 text-indigo-600" />
-            <h3 className="text-lg font-bold text-gray-800">Recent Investigations</h3>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
-              {recentCases.length}
-            </span>
+      {/* Recent Investigations Dossier List */}
+      <div className="bg-[var(--bg-card)] p-6 rounded-2xl shadow-xl border border-[var(--border-color)] transition-colors duration-200">
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border-color)]">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-lg bg-[#182124] text-[#79E282]">
+              <History className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-[var(--text-primary)]">Investigation Case Files</h3>
+              <p className="text-xs text-[var(--text-muted)]">{recentCases.length} Registered Incidents</p>
+            </div>
           </div>
           <button
             onClick={() => {
@@ -398,46 +541,49 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
               fetchRecentCases();
             }}
             disabled={loadingRecent}
-            className="text-xs text-gray-500 hover:text-indigo-600 flex items-center p-1 rounded hover:bg-gray-50"
+            className="text-xs text-[var(--text-muted)] hover:text-[#79E282] flex items-center px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[#1F2B2F] border border-[var(--border-color)] transition-colors"
             title="Refresh list"
           >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingRecent ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3 w-3 mr-1.5 ${loadingRecent ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
 
         {recentCases.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 text-sm">
-            {loadingRecent ? 'Loading investigations...' : 'No previous investigations found. Start your first trace above.'}
+          <div className="text-center py-8 text-[var(--text-muted)] text-xs">
+            {loadingRecent ? 'Fetching case repository...' : 'No previous investigations found. Initiate your first trace above.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[var(--bg-surface)] text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-color)]">
                 <tr>
-                  <th className="px-4 py-3">Case ID</th>
+                  <th className="px-4 py-3">Case Reference</th>
                   <th className="px-4 py-3">Chain</th>
                   <th className="px-4 py-3">Reported Wallet</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">State</th>
+                  <th className="px-4 py-3">Timestamp</th>
                   <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-[var(--border-color)]">
                 {recentCases.slice(0, 10).map((c) => {
                   const isCurrent = c.id === activeCase;
-                  const dateStr = c.created_at ? new Date(c.created_at).toLocaleString() : 'Recently';
+                  const dateStr = c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Recently';
                   return (
-                    <tr key={c.id} className={`hover:bg-gray-50/80 transition-colors ${isCurrent ? 'bg-indigo-50/40' : ''}`}>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600" title={c.id}>
+                    <tr
+                      key={c.id}
+                      className={`hover:bg-[var(--bg-surface)] transition-colors ${isCurrent ? 'bg-[#79E282]/5' : ''}`}
+                    >
+                      <td className="px-4 py-3 font-mono text-[11px] text-[var(--text-muted)]" title={c.id}>
                         {c.id.slice(0, 8)}...
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${getChainBadgeStyle(c.chain)}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getChainBadgeStyle(c.chain)}`}>
                           {c.chain.toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-800" title={c.reported_address}>
+                      <td className="px-4 py-3 font-mono text-[11px] text-[var(--text-primary)]" title={c.reported_address}>
                         {c.reported_address
                           ? c.reported_address.length > 20
                             ? `${c.reported_address.slice(0, 10)}...${c.reported_address.slice(-6)}`
@@ -446,27 +592,27 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                             c.status === 'completed'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              ? 'bg-[#79E282]/10 text-[#79E282] border border-[#79E282]/30'
+                              : 'bg-[#E6A94A]/10 text-[#E6A94A] border border-[#E6A94A]/30'
                           }`}
                         >
                           {c.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{dateStr}</td>
+                      <td className="px-4 py-3 text-[11px] text-[var(--text-muted)]">{dateStr}</td>
                       <td className="px-4 py-3 text-right">
                         {isCurrent ? (
-                          <span className="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
+                          <span className="inline-flex items-center text-[11px] font-bold text-[#79E282] bg-[#79E282]/10 px-2 py-0.5 rounded-md border border-[#79E282]/30">
                             <Check className="h-3 w-3 mr-1" /> Active
                           </span>
                         ) : (
                           <button
                             onClick={() => handleOpenCase(c.id)}
-                            className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 px-2.5 py-1 rounded border border-indigo-200 hover:border-indigo-600 transition-colors"
+                            className="inline-flex items-center text-[11px] font-medium text-[#79E282] hover:text-[#0B0B0D] bg-[var(--bg-surface)] hover:bg-[#79E282] px-2.5 py-1 rounded-md border border-[var(--border-color)] hover:border-[#79E282] transition-colors"
                           >
-                            Open Investigation
+                            Open
                             <ArrowRight className="h-3 w-3 ml-1" />
                           </button>
                         )}
