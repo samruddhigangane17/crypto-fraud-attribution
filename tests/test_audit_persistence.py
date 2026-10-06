@@ -61,7 +61,12 @@ class FakeAuditSupabase(SupabaseClient):
         if "order" in filters:
             order_spec = filters["order"]
             col, direction = order_spec.split(".")
-            rows.sort(key=lambda r: str(r.get(col, "")), reverse=(direction == "desc"))
+            indexed_rows = list(enumerate(rows))
+            if direction == "desc":
+                indexed_rows.sort(key=lambda item: (str(item[1].get(col, "")), item[0]), reverse=True)
+            else:
+                indexed_rows.sort(key=lambda item: (str(item[1].get(col, "")), item[0]))
+            rows = [item[1] for item in indexed_rows]
 
         # Handle limit
         if "limit" in filters:
