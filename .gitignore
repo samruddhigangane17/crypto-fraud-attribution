@@ -21,6 +21,7 @@ htmlcov/
 # Generated Artifacts
 generated_reports/
 *.pdf
+*.zip
 
 # IDE & OS
 .vscode/
