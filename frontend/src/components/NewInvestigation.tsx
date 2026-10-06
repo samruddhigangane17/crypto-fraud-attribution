@@ -229,7 +229,7 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
     if (c === 'bitcoin' || c === 'btc') return 'bg-[#F59E0B]/10 text-[#FBBF24] border-[#F59E0B]/30';
     if (c === 'tron' || c === 'trx') return 'bg-[#EF4444]/10 text-[#F87171] border-[#EF4444]/30';
     if (c === 'bsc') return 'bg-[#EAB308]/10 text-[#FACC15] border-[#EAB308]/30';
-    return 'bg-[#182124] text-[var(--text-muted)] border-[var(--border-color)]';
+    return 'bg-[var(--bg-secondary)] text-[var(--text-muted)] border-[var(--border-color)]';
   };
 
   return (
@@ -239,26 +239,26 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--border-color)]">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] flex items-center">
-              <Shield className="mr-3 h-6 w-6 text-[#79E282]" />
+              <Shield className="mr-3 h-6 w-6 text-[var(--accent-primary)]" />
               Initiate Fraud Investigation
             </h2>
             <p className="text-xs text-[var(--text-muted)] mt-1">
               Submit reported fraudulent wallets to reconstruct forward fund dispersion, taint flow, and VASP off-ramps.
             </p>
           </div>
-          <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[#182124] text-[#79E282] border border-[#243338]">
+          <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[var(--bg-secondary)] text-[var(--accent-primary)] border border-[var(--border-color)]">
             Automated Traversal
           </span>
         </div>
 
         {activeCase && (
-          <div className="mb-6 p-4 bg-[#79E282]/10 text-[#79E282] border border-[#79E282]/30 rounded-xl flex items-center justify-between">
+          <div className="mb-6 p-4 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 rounded-xl flex items-center justify-between">
             <span className="font-mono text-xs">
               Active Investigation Loaded: <strong className="underline">{activeCase}</strong>
             </span>
             <button
               onClick={() => navigate('/graph')}
-              className="text-xs bg-[#79E282] text-[#0B0B0D] font-bold px-3 py-1.5 rounded-lg hover:bg-white flex items-center transition-colors shadow-sm"
+              className="text-xs bg-[var(--accent-primary)] text-[var(--bg-card)] font-bold px-3 py-1.5 rounded-lg hover:opacity-90 flex items-center transition-colors shadow-sm"
             >
               Inspect Graph <ArrowRight className="h-3 w-3 ml-1.5" />
             </button>
@@ -301,8 +301,8 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
                     onClick={() => handleSelectChain(opt.id as any)}
                     className={`p-3 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between ${
                       isSelected
-                        ? 'border-[#79E282] bg-[#182124] shadow-md ring-1 ring-[#79E282]'
-                        : 'border-[var(--border-color)] bg-[var(--bg-surface)] hover:border-[#368980]'
+                        ? 'border-[var(--accent-primary)] bg-[var(--bg-secondary)] shadow-md ring-1 ring-[var(--accent-primary)]'
+                        : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--accent-secondary)]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -329,13 +329,13 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
               <label htmlFor="wallet-address-input" className="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
                 Reported Incident Wallet Address
               </label>
-              <span className="text-[10px] text-[#79E282]">Supports BTC, ETH, TRX, BSC</span>
+              <span className="text-[10px] text-[var(--accent-primary)]">Supports BTC, ETH, TRX, BSC</span>
             </div>
             <input
               id="wallet-address-input"
               type="text"
               required
-              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-3 focus:ring-2 focus:ring-[#79E282] focus:border-[#79E282] font-mono text-sm text-[var(--text-primary)] transition-all shadow-inner"
+              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-3 focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] font-mono text-sm text-[var(--text-primary)] transition-all shadow-inner"
               placeholder="e.g. 0xmock_wallet_a or T9yD14Nj... or bc1q..."
               value={address}
               onChange={(e) => setAddress(e.target.value)}
@@ -344,14 +344,14 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
             {/* Quick Fill Sample Wallets */}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] text-[var(--text-muted)] mr-1 flex items-center">
-                <Sparkles className="h-3 w-3 mr-1 text-[#79E282]" /> Quick Test:
+                <Sparkles className="h-3 w-3 mr-1 text-[var(--accent-primary)]" /> Quick Test:
               </span>
               {SAMPLE_WALLETS.map((s, idx) => (
                 <button
                   type="button"
                   key={idx}
                   onClick={() => handleQuickFill(s)}
-                  className="text-[10px] font-mono px-2 py-1 rounded-md bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[#79E282] hover:bg-[#1F2B2F] border border-[var(--border-color)] transition-colors"
+                  className="text-[10px] font-mono px-2 py-1 rounded-md bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--border-color)] border border-[var(--border-color)] transition-colors"
                 >
                   {s.label}
                 </button>
@@ -509,12 +509,12 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
                 setBulkError(null);
                 setBulkResponse(null);
               }}
-              className="block w-full text-xs text-[var(--text-muted)] file:mr-3 file:py-2 file:px-3.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#182124] file:text-[#79E282] hover:file:bg-[#1F2B2F] border border-[var(--border-color)] bg-[var(--bg-surface)] rounded-xl p-2 focus:outline-none cursor-pointer disabled:opacity-50"
+              className="block w-full text-xs text-[var(--text-muted)] file:mr-3 file:py-2 file:px-3.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[var(--bg-secondary)] file:text-[var(--accent-primary)] hover:file:bg-[var(--border-color)] border border-[var(--border-color)] bg-[var(--bg-secondary)] rounded-xl p-2 focus:outline-none cursor-pointer disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={bulkLoading || !selectedFile}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-[#0B0B0D] bg-[#79E282] hover:bg-white disabled:bg-[#368980]/40 disabled:text-[#899695] transition-colors shrink-0 shadow-sm"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-[var(--bg-card)] bg-[var(--accent-primary)] hover:opacity-90 disabled:opacity-50 transition-colors shrink-0 shadow-sm"
             >
               <Upload className="h-3.5 w-3.5 mr-1.5" />
               {bulkLoading ? 'Processing Batch...' : 'Upload & Parse CSV'}
@@ -527,7 +527,7 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
       <div className="bg-[var(--bg-card)] p-6 rounded-2xl shadow-xl border border-[var(--border-color)] transition-colors duration-200">
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border-color)]">
           <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-lg bg-[#182124] text-[#79E282]">
+            <div className="p-2 rounded-lg bg-[var(--bg-secondary)] text-[var(--accent-primary)]">
               <History className="h-4 w-4" />
             </div>
             <div>
@@ -541,7 +541,7 @@ const NewInvestigation: React.FC<NewInvestigationProps> = ({
               fetchRecentCases();
             }}
             disabled={loadingRecent}
-            className="text-xs text-[var(--text-muted)] hover:text-[#79E282] flex items-center px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[#1F2B2F] border border-[var(--border-color)] transition-colors"
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-primary)] flex items-center px-2.5 py-1 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--border-color)] border border-[var(--border-color)] transition-colors"
             title="Refresh list"
           >
             <RefreshCw className={`h-3 w-3 mr-1.5 ${loadingRecent ? 'animate-spin' : ''}`} />

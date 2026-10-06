@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Link, useLocation } from 'react-router-dom';
 import {
   Activity,
   ShieldAlert,
@@ -11,7 +11,6 @@ import {
   FolderOpen,
   Sun,
   Moon,
-  Sparkles,
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { apiJson } from './lib/api';
@@ -59,7 +58,6 @@ function Dashboard({ session }: { session: Session }) {
 
   // Active chain selection shared with 3D coins hero
   const [selectedChain, setSelectedChain] = useState<'ethereum' | 'tron' | 'bitcoin' | 'bsc'>('ethereum');
-  const [showHeroCoins, setShowHeroCoins] = useState(true);
 
   // Light / Dark Theme State
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -134,14 +132,66 @@ function Dashboard({ session }: { session: Session }) {
     return () => clearInterval(t);
   }, [activeCase]);
 
-  const navLinks = [
+  // 4 Core Separate Tabs (strictly 1 active view at a time)
+  const coreTabs = [
     { path: '/', label: 'New Investigation', icon: Search },
     { path: '/graph', label: 'Fund-Flow Graph', icon: Share2 },
-    { path: '/risk', label: 'Risk & Attribution', icon: ShieldAlert },
     { path: '/recovery', label: 'Recovery Layer', icon: Clock },
-    { path: '/alerts', label: 'Monitoring Alerts', icon: Activity },
     { path: '/report', label: 'Evidence Report', icon: FileText },
   ];
+
+  // Secondary analysis modules
+  const secondaryLinks = [
+    { path: '/risk', label: 'Risk & Attribution', icon: ShieldAlert },
+    { path: '/alerts', label: 'Monitoring Alerts', icon: Activity },
+  ];
+
+  const getPageInfo = () => {
+    switch (location.pathname) {
+      case '/':
+        return {
+          title: 'New Investigation',
+          category: 'TARGET INGESTION',
+          subtitle: 'Multi-chain target ingestion, address resolution, and transaction dispatch',
+        };
+      case '/graph':
+        return {
+          title: 'Fund-Flow Graph',
+          category: 'MULTI-HOP GRAPH',
+          subtitle: 'Interactive multi-hop taint tracking, flow topology, and cluster expansion',
+        };
+      case '/recovery':
+        return {
+          title: 'Recovery Layer',
+          category: 'ASSET RECOVERY',
+          subtitle: 'Golden Hour countdown clock, typology classifier, and legal freeze pack generation',
+        };
+      case '/report':
+        return {
+          title: 'Evidence Report',
+          category: 'FORENSIC DOSSIER',
+          subtitle: 'Court-admissible tamper-evident report with SHA-256 digital signature verification',
+        };
+      case '/risk':
+        return {
+          title: 'Risk & Attribution',
+          category: 'SCORING ENGINE',
+          subtitle: 'Deterministic forensic risk classification, entity profiling, and typology analysis',
+        };
+      case '/alerts':
+        return {
+          title: 'Monitoring Alerts',
+          category: 'SURVEILLANCE',
+          subtitle: 'Real-time on-chain wallet monitoring, velocity alerts, and convergence detection',
+        };
+      default:
+        return {
+          title: 'Forensic Workspace',
+          category: 'DASHBOARD',
+          subtitle: 'CryptoTracer Anti-Fraud Attribution Suite',
+        };
+    }
+  };
 
   const handleSelectChainFromCoins = (chain: 'ethereum' | 'tron' | 'bitcoin' | 'bsc') => {
     setSelectedChain(chain);
@@ -149,39 +199,75 @@ function Dashboard({ session }: { session: Session }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--bg-main)] text-[var(--text-primary)]">
-      {/* Sidebar */}
+      {/* Left Sidebar */}
       <aside className="w-64 bg-[var(--bg-card)] border-r border-[var(--border-color)] flex flex-col transition-colors duration-200">
         <div className="p-4 border-b border-[var(--border-color)]">
           <CryptoTracerLogo />
         </div>
 
-        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
-          {navLinks.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {/* Primary 4 Core Tabs */}
+          <div>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-[var(--text-muted)] px-3 mb-1.5">
+              Core Forensic Workflow
+            </div>
+            <div className="space-y-1">
+              {coreTabs.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
 
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-[#182124] text-[#79E282] border-l-4 border-[#79E282] shadow-sm font-semibold'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
-                }`}
-              >
-                <Icon className={`mr-3 h-4 w-4 ${isActive ? 'text-[#79E282]' : 'text-[var(--text-muted)]'}`} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center px-3 py-2.5 rounded-xl text-xs transition-all duration-150 ${
+                      isActive
+                        ? 'bg-[var(--bg-surface)] text-[var(--accent-primary)] border-l-4 border-[var(--accent-primary)] shadow-sm font-bold'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] font-medium'
+                    }`}
+                  >
+                    <Icon className={`mr-2.5 h-4 w-4 ${isActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'}`} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Secondary Specialized Modules */}
+          <div className="pt-2 border-t border-[var(--border-subtle)]">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-[var(--text-muted)] px-3 mb-1.5">
+              Telemetry & Alerts
+            </div>
+            <div className="space-y-1">
+              {secondaryLinks.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center px-3 py-2 rounded-xl text-xs transition-all duration-150 ${
+                      isActive
+                        ? 'bg-[var(--bg-surface)] text-[var(--accent-primary)] border-l-4 border-[var(--accent-primary)] font-bold'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] font-medium'
+                    }`}
+                  >
+                    <Icon className={`mr-2.5 h-3.5 w-3.5 ${isActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'}`} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </nav>
 
         {/* Sidebar Footer with Sign Out */}
-        <div className="p-3 border-t border-[var(--border-color)] space-y-2">
+        <div className="p-3 border-t border-[var(--border-color)]">
           <button
             onClick={() => supabase.auth.signOut()}
-            className="flex items-center w-full px-3 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[#D95F63] hover:bg-[#D95F63]/10 rounded-lg transition-colors"
+            className="flex items-center w-full px-3 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[#D95F63] hover:bg-[#D95F63]/10 rounded-xl transition-colors"
           >
             <LogOut className="mr-2.5 h-4 w-4" />
             Sign Out
@@ -189,25 +275,33 @@ function Dashboard({ session }: { session: Session }) {
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Execution Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navbar */}
-        <header className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-6 py-3.5 flex justify-between items-center transition-colors duration-200">
+        <header className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-6 py-2.5 flex flex-wrap justify-between items-center gap-3 transition-colors duration-200">
+          {/* Active Breadcrumb / Page Title */}
           <div className="flex items-center space-x-3">
-            <h2 className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-              Investigator Intelligence Console
-            </h2>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#79E282]/10 text-[#79E282] border border-[#79E282]/30">
-              v2.1 Real-Time
-            </span>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-sm font-bold text-[var(--text-primary)] tracking-tight">
+                  {getPageInfo().title}
+                </h1>
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] text-[var(--accent-primary)] border border-[var(--border-color)]">
+                  {getPageInfo().category}
+                </span>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                {getPageInfo().subtitle}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             {/* Active Case Selector */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1.5">
               <label htmlFor="case-select" className="text-xs font-medium text-[var(--text-muted)] flex items-center">
-                <FolderOpen className="h-3.5 w-3.5 mr-1.5 text-[#79E282]" />
-                Active Dossier:
+                <FolderOpen className="h-3.5 w-3.5 mr-1 text-[var(--accent-primary)]" />
+                Case:
               </label>
               {cases.length > 0 ? (
                 <select
@@ -217,10 +311,10 @@ function Dashboard({ session }: { session: Session }) {
                     const val = e.target.value;
                     if (val) setActiveCase(val);
                   }}
-                  className="bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-[#79E282] focus:border-[#79E282] shadow-sm max-w-[270px] truncate font-mono"
+                  className="bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-lg px-2 py-1 focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] shadow-sm max-w-[240px] truncate font-mono"
                   title="Switch active investigation"
                 >
-                  {!activeCase && <option value="">Select an investigation...</option>}
+                  {!activeCase && <option value="">Select investigation...</option>}
                   {cases.map((c) => (
                     <option key={c.id} value={c.id}>
                       [{c.chain.slice(0, 3).toUpperCase()}] {c.reported_address ? `${c.reported_address.slice(0, 6)}...${c.reported_address.slice(-4)}` : c.id.slice(0, 8)} ({c.status})
@@ -234,15 +328,6 @@ function Dashboard({ session }: { session: Session }) {
               )}
             </div>
 
-            {/* 3D Hero Toggle Button */}
-            <button
-              onClick={() => setShowHeroCoins(!showHeroCoins)}
-              className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[#79E282] transition-colors"
-              title="Toggle 3D Coins Hero Banner"
-            >
-              <Sparkles className="h-4 w-4" />
-            </button>
-
             {/* Light / Dark Mode Toggle */}
             <button
               onClick={toggleTheme}
@@ -252,66 +337,79 @@ function Dashboard({ session }: { session: Session }) {
               {theme === 'dark' ? <Sun className="h-4 w-4 text-[#E6A94A]" /> : <Moon className="h-4 w-4 text-[#368980]" />}
             </button>
 
-            {/* User identity pill */}
-            <div className="text-xs font-mono font-medium text-[#79E282] bg-[#79E282]/10 border border-[#79E282]/20 px-2.5 py-1 rounded-full truncate max-w-[180px]">
+            {/* Officer Email Pill */}
+            <div className="text-xs font-mono font-medium text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 px-2.5 py-1 rounded-full truncate max-w-[170px]">
               {session.user.email}
             </div>
           </div>
         </header>
 
         {/* Standing Safe-Handling Advisory Banner */}
-        <div className="bg-[#E6A94A]/10 border-b border-[#E6A94A]/30 px-6 py-2 flex items-center justify-between text-xs text-[#E6A94A]">
-          <div className="flex items-center space-x-2.5">
-            <span className="font-bold px-1.5 py-0.5 bg-[#E6A94A] text-[#0B0B0D] rounded text-[9.5px] tracking-wider uppercase">
+        <div className="bg-[var(--status-warning-bg)] border-b border-[var(--status-warning-border)] px-6 py-2 flex items-center justify-between text-xs text-[var(--status-warning)]">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold px-1.5 py-0.5 bg-[var(--status-warning)] text-[var(--bg-card)] rounded text-[9.5px] tracking-wider uppercase">
               Law Enforcement Advisory
             </span>
             <span>
               Official recovery processes <strong>never</strong> ask victims for private keys, seed phrases, OTPs, or upfront fees. Unsolicited "recovery agents" are fraudulent.
             </span>
           </div>
-          <span className="text-[#E6A94A]/80 font-bold hidden md:inline tracking-wider uppercase text-[10px]">
+          <span className="opacity-80 font-bold hidden md:inline tracking-wider uppercase text-[10px]">
             SOP Chain of Custody
           </span>
         </div>
 
-        {/* Mock/Demo Notification Banner */}
         {dataSource === 'mock' && (
-          <div className="bg-[#E6A94A]/15 border-b border-[#E6A94A]/40 text-[#E6A94A] text-xs px-6 py-1.5 flex items-center space-x-2">
-            <span className="font-bold uppercase tracking-wider text-[10px] bg-[#E6A94A]/30 px-1 py-0.5 rounded">Demo Data</span>
+          <div className="bg-[var(--status-warning-bg)] border-b border-[var(--status-warning-border)] text-[var(--status-warning)] text-xs px-6 py-1.5 flex items-center space-x-2">
+            <span className="font-bold uppercase tracking-wider text-[10px] bg-[var(--status-warning)] text-[var(--bg-card)] px-1 py-0.5 rounded">Demo Data</span>
             <span>This dossier is powered by deterministic mock blockchain transactions for hermetic demonstration.</span>
           </div>
         )}
 
-        {/* Main Content Router */}
-        <main className="flex-1 overflow-auto p-6 bg-[var(--bg-main)] transition-colors duration-200">
-          {/* Optional Collapsible 3D Crypto Coins Hero Section */}
-          {showHeroCoins && location.pathname === '/' && (
-            <Floating3DCoins
-              onSelectChain={handleSelectChainFromCoins}
-              activeChain={selectedChain}
-            />
+        {/* Main Content Router — STRICT TAB ISOLATION */}
+        <main className="flex-1 overflow-auto p-6 bg-[var(--bg-primary)] transition-colors duration-200 flex flex-col">
+          {/* TAB 1: Only renders 3D Floating Coins Hero + NewInvestigation */}
+          {location.pathname === '/' && (
+            <div className="space-y-6">
+              <Floating3DCoins
+                onSelectChain={handleSelectChainFromCoins}
+                activeChain={selectedChain}
+              />
+              <NewInvestigation
+                setActiveCase={setActiveCase}
+                activeCase={activeCase}
+                cases={cases}
+                onCaseCreated={refreshCases}
+                selectedChain={selectedChain}
+                onSelectChain={setSelectedChain}
+              />
+            </div>
           )}
 
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <NewInvestigation
-                  setActiveCase={setActiveCase}
-                  activeCase={activeCase}
-                  cases={cases}
-                  onCaseCreated={refreshCases}
-                  selectedChain={selectedChain}
-                  onSelectChain={setSelectedChain}
-                />
-              }
-            />
-            <Route path="/graph" element={<FundFlowGraph activeCase={activeCase} />} />
-            <Route path="/risk" element={<RiskAttribution activeCase={activeCase} />} />
-            <Route path="/recovery" element={<RecoveryLayer activeCase={activeCase} />} />
-            <Route path="/alerts" element={<MonitoringAlerts activeCase={activeCase} />} />
-            <Route path="/report" element={<EvidenceReport activeCase={activeCase} />} />
-          </Routes>
+          {/* TAB 2: Only renders FundFlowGraph (full width, no side clocks) */}
+          {location.pathname === '/graph' && (
+            <div className="flex-1 flex flex-col h-full min-h-[550px]">
+              <FundFlowGraph activeCase={activeCase} />
+            </div>
+          )}
+
+          {/* TAB 3: Only renders RecoveryLayer */}
+          {location.pathname === '/recovery' && (
+            <RecoveryLayer activeCase={activeCase} />
+          )}
+
+          {/* TAB 4: Only renders EvidenceReport */}
+          {location.pathname === '/report' && (
+            <EvidenceReport activeCase={activeCase} />
+          )}
+
+          {/* Secondary Telemetry Routes (only rendered when their specific path is active) */}
+          {location.pathname === '/risk' && (
+            <RiskAttribution activeCase={activeCase} />
+          )}
+          {location.pathname === '/alerts' && (
+            <MonitoringAlerts activeCase={activeCase} />
+          )}
         </main>
       </div>
     </div>

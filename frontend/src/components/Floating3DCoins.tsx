@@ -89,25 +89,25 @@ const Floating3DCoins: React.FC<Floating3DCoinsProps> = ({ onSelectChain, active
   };
 
   return (
-    <div className="relative mb-6 rounded-2xl overflow-hidden border border-[#243338] bg-[#11171A] shadow-xl transition-all duration-300">
+    <div className="relative mb-6 rounded-2xl overflow-hidden border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xl transition-all duration-300">
       {/* Decorative ambient background mesh */}
       <div className="absolute inset-0 pointer-events-none opacity-20">
-        <div className="absolute -top-24 left-1/4 w-96 h-96 bg-[#79E282] rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-[#368980] rounded-full blur-3xl" />
+        <div className="absolute -top-24 left-1/4 w-96 h-96 bg-[var(--accent-primary)] rounded-full blur-3xl" />
+        <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-[var(--accent-secondary)] rounded-full blur-3xl" />
       </div>
 
       {/* Header bar with collapse toggle */}
-      <div className="relative z-10 px-6 py-4 flex items-center justify-between border-b border-[#1C272A] bg-[#0E1315]/80 backdrop-blur-md">
+      <div className="relative z-10 px-6 py-4 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/80 backdrop-blur-md">
         <div className="flex items-center space-x-3">
-          <div className="h-2 w-2 rounded-full bg-[#79E282] animate-ping" />
-          <span className="text-[11px] font-bold tracking-widest text-[#79E282] uppercase">
+          <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)] animate-ping" />
+          <span className="text-[11px] font-bold tracking-widest text-[var(--accent-primary)] uppercase">
             Multi-Chain Interactive Traversal
           </span>
-          <span className="text-xs text-[#899695] hidden sm:inline">| Click any 3D asset to activate live trace</span>
+          <span className="text-xs text-[var(--text-muted)] hidden sm:inline">| Click any 3D asset to activate live trace</span>
         </div>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs font-medium text-[#899695] hover:text-[#E8EEEB] bg-[#182124] hover:bg-[#1F2B2F] border border-[#243338] rounded-md transition-colors"
+          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--bg-card)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md transition-colors"
           title={isCollapsed ? 'Expand 3D Hero' : 'Collapse 3D Hero'}
         >
           <span>{isCollapsed ? 'Show 3D Coins' : 'Collapse'}</span>
@@ -118,10 +118,10 @@ const Floating3DCoins: React.FC<Floating3DCoinsProps> = ({ onSelectChain, active
       {!isCollapsed && (
         <div className="relative z-10 p-6 md:p-8">
           <div className="text-center max-w-2xl mx-auto mb-8">
-            <h2 className="text-2xl md:text-3xl font-extrabold text-[#E8EEEB] tracking-tight mb-2">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-[var(--text-primary)] tracking-tight mb-2">
               Select Blockchain Architecture
             </h2>
-            <p className="text-sm text-[#899695] leading-relaxed">
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
               Real-time heuristic clustering and forward taint-flow analysis across UTXO and EVM chains. Click a coin to auto-configure investigation parameters.
             </p>
           </div>
@@ -140,8 +140,8 @@ const Floating3DCoins: React.FC<Floating3DCoinsProps> = ({ onSelectChain, active
                   onMouseLeave={() => setHoveredCoin(null)}
                   className={`group relative cursor-pointer rounded-xl p-5 border transition-all duration-300 flex flex-col items-center text-center ${
                     isSelected
-                      ? 'border-[#79E282] bg-[#182124] ring-2 ring-[#79E282]/40 shadow-lg'
-                      : 'border-[#243338] bg-[#141C1F] hover:border-[#368980] hover:bg-[#182124]'
+                      ? 'border-[var(--accent-primary)] bg-[var(--bg-secondary)] ring-2 ring-[var(--accent-primary)]/40 shadow-lg'
+                      : 'border-[var(--border-color)] bg-[var(--bg-secondary)]/50 hover:border-[var(--accent-secondary)] hover:bg-[var(--bg-secondary)]'
                   }`}
                   style={{
                     boxShadow: isHovered || isSelected ? `0 12px 30px -8px ${c.glowColor}` : undefined,
@@ -149,7 +149,7 @@ const Floating3DCoins: React.FC<Floating3DCoinsProps> = ({ onSelectChain, active
                 >
                   {/* Active selection badge */}
                   {isSelected && (
-                    <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#79E282]/20 text-[#79E282] border border-[#79E282]/40">
+                    <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] border border-[var(--accent-primary)]/40">
                       <Zap className="h-3 w-3" />
                       <span>SELECTED</span>
                     </div>
@@ -233,17 +233,17 @@ const Floating3DCoins: React.FC<Floating3DCoinsProps> = ({ onSelectChain, active
 
                   {/* Label & Details */}
                   <div className="mt-2 w-full">
-                    <div className="flex items-center justify-center space-x-1.5 font-bold text-base text-[#E8EEEB]">
+                    <div className="flex items-center justify-center space-x-1.5 font-bold text-base text-[var(--text-primary)]">
                       <span>{c.name}</span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-[#1C272A] text-[#899695] font-mono">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--bg-card)] text-[var(--text-muted)] font-mono border border-[var(--border-color)]">
                         {c.ticker}
                       </span>
                     </div>
-                    <div className="text-[11px] text-[#899695] mt-1 line-clamp-1">{c.tag}</div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-1 line-clamp-1">{c.tag}</div>
                   </div>
 
                   {/* Interactive Button */}
-                  <div className="mt-4 w-full pt-3 border-t border-[#1C272A] flex items-center justify-between text-xs font-medium text-[#79E282] group-hover:text-white transition-colors">
+                  <div className="mt-4 w-full pt-3 border-t border-[var(--border-color)] flex items-center justify-between text-xs font-medium text-[var(--accent-primary)] group-hover:text-[var(--text-primary)] transition-colors">
                     <span className="flex items-center">
                       <Search className="h-3 w-3 mr-1" />
                       Trace {c.ticker}

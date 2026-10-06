@@ -1,7 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { apiJson } from '../lib/api';
-import { Play, RefreshCw, AlertCircle, Box, Layers, Info, Compass } from 'lucide-react';
+import {
+  Play,
+  RefreshCw,
+  AlertCircle,
+  Box,
+  Layers,
+  Info,
+  Compass,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+} from 'lucide-react';
+import Sphere3DGraph from './Sphere3DGraph';
 
 interface FundFlowGraphProps {
   activeCase: string | null;
@@ -27,6 +39,29 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [caseInfo, setCaseInfo] = useState<InvestigationInfo | null>(null);
   const [is3DView, setIs3DView] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<'dark' | 'light'>(() => {
+    return (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') || 'dark';
+  });
+  const cyRef = useRef<any>(null);
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const theme = (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') || 'dark';
+      setCurrentTheme(theme);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const handleZoomIn = () => {
+    if (cyRef.current) cyRef.current.zoom(cyRef.current.zoom() * 1.25);
+  };
+  const handleZoomOut = () => {
+    if (cyRef.current) cyRef.current.zoom(cyRef.current.zoom() * 0.8);
+  };
+  const handleFit = () => {
+    if (cyRef.current) cyRef.current.fit(undefined, 40);
+  };
 
   const loadGraph = async () => {
     if (!activeCase) return;
@@ -194,77 +229,128 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
     avoidOverlap: true,
   };
 
-  // Official CryptoTracer Cytoscape styling
+  // Theme-Aware CryptoTracer Cytoscape styling
+  const isLight = currentTheme === 'light';
+
   const style = [
+    // Base node style (Intermediary / Hop)
     {
       selector: 'node',
       style: {
         'label': 'data(label)',
         'text-valign': 'bottom' as any,
         'text-margin-y': 6,
-        'background-color': '#368980',
-        'color': '#E8EEEB',
+        'width': 38,
+        'height': 38,
+        'background-fill': 'radial-gradient' as any,
+        'background-gradient-stop-colors': '#89F792 #26736E #0D3533',
+        'background-gradient-stop-positions': '0% 55% 100%',
+        'border-color': '#79E282',
+        'border-width': 2,
+        'color': isLight ? '#0B1512' : '#E8EEEB',
         'font-family': 'Montserrat, sans-serif',
         'font-size': '11px',
         'font-weight': 600,
-        'text-background-opacity': 0.8,
-        'text-background-color': '#0B0B0D',
-        'text-background-padding': '2px',
+        'text-background-opacity': 0.92,
+        'text-background-color': isLight ? '#E2ECE7' : '#182124',
+        'text-background-padding': '3px',
         'text-background-shape': 'roundrectangle' as any,
-        'border-width': 2,
-        'border-color': '#243338',
+        'text-border-width': 1,
+        'text-border-color': isLight ? '#B8CFC5' : '#243338',
       },
     },
+    // Victim / Source Node: radial gradient #FF9E9E -> #D95F63 -> #6E1A1E with glowing red halo
     {
       selector: 'node[type="victim"], node[type="source"]',
       style: {
-        'background-color': '#D95F63', // Critical / Victim
-        'border-color': '#FF8E92',
-        'border-width': 3,
+        'background-fill': 'radial-gradient' as any,
+        'background-gradient-stop-colors': '#FF9E9E #D95F63 #6E1A1E',
+        'background-gradient-stop-positions': '0% 55% 100%',
+        'width': 48,
+        'height': 48,
+        'border-width': 6,
+        'border-color': '#D95F63',
+        'border-opacity': 0.35,
       },
     },
+    // Intermediary Node: radial gradient #89F792 -> #26736E -> #0D3533 with teal halo
+    {
+      selector: 'node[type="intermediate"], node[type="hop"], node[type="mule"]',
+      style: {
+        'background-fill': 'radial-gradient' as any,
+        'background-gradient-stop-colors': '#89F792 #26736E #0D3533',
+        'background-gradient-stop-positions': '0% 55% 100%',
+        'width': 38,
+        'height': 38,
+        'border-color': '#79E282',
+        'border-width': 3,
+        'border-opacity': 0.7,
+      },
+    },
+    // Exchange / VASP Node: radial gradient #C8FFCD -> #79E282 -> #1B6B36 with bright mint aura
     {
       selector: 'node[type="exchange"], node[type="vasp"]',
       style: {
-        'background-color': '#79E282', // Electric Mint / Exchange
-        'shape': 'rectangle' as any,
+        'background-fill': 'radial-gradient' as any,
+        'background-gradient-stop-colors': '#C8FFCD #79E282 #1B6B36',
+        'background-gradient-stop-positions': '0% 55% 100%',
+        'shape': 'hexagon' as any,
+        'width': 46,
+        'height': 46,
         'border-color': '#FFFFFF',
-        'border-width': 2,
+        'border-width': 3,
+        'border-opacity': 0.9,
       },
     },
+    // Mixer Node: radial gradient #FFE082 -> #E6A94A -> #7A4B08
     {
       selector: 'node[type="mixer"]',
       style: {
-        'background-color': '#E6A94A', // Amber / Mixer
+        'background-fill': 'radial-gradient' as any,
+        'background-gradient-stop-colors': '#FFE082 #E6A94A #7A4B08',
+        'background-gradient-stop-positions': '0% 55% 100%',
         'shape': 'diamond' as any,
+        'width': 44,
+        'height': 44,
         'border-color': '#FDE68A',
-        'border-width': 2,
+        'border-width': 3,
       },
     },
+    // Bridge Node: radial gradient #BAE6FD -> #38BDF8 -> #0369A1
     {
       selector: 'node[type="bridge"]',
       style: {
-        'background-color': '#38BDF8', // Sky Blue / Bridge
-        'shape': 'hexagon' as any,
+        'background-fill': 'radial-gradient' as any,
+        'background-gradient-stop-colors': '#BAE6FD #38BDF8 #0369A1',
+        'background-gradient-stop-positions': '0% 55% 100%',
+        'shape': 'round-rectangle' as any,
+        'width': 42,
+        'height': 42,
         'border-color': '#BAE6FD',
-        'border-width': 2,
+        'border-width': 3,
       },
     },
+    // Curved Glowing Edges & Styled Amount Pills
     {
       selector: 'edge',
       style: {
         'width': 2.5,
-        'line-color': '#368980',
-        'target-arrow-color': '#79E282',
-        'target-arrow-shape': 'triangle' as any,
         'curve-style': 'bezier' as any,
+        'control-point-step-size': 35,
+        'line-color': isLight ? '#0F766E' : '#368980',
+        'target-arrow-color': isLight ? '#0F766E' : '#79E282',
+        'target-arrow-shape': 'triangle' as any,
         'label': 'data(amount)',
         'font-size': '10px',
         'font-family': 'JetBrains Mono, monospace',
-        'color': '#79E282',
-        'text-background-opacity': 0.85,
-        'text-background-color': '#11171A',
-        'text-background-padding': '2px',
+        'font-weight': 600,
+        'color': isLight ? '#0F766E' : '#79E282',
+        'text-background-opacity': 0.92,
+        'text-background-color': isLight ? '#E2ECE7' : '#182124',
+        'text-background-padding': '4px',
+        'text-background-shape': 'roundrectangle' as any,
+        'text-border-width': 1,
+        'text-border-color': isLight ? '#B8CFC5' : '#368980',
       },
     },
   ];
@@ -274,9 +360,9 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
       {/* Graph Visualiser Container */}
       <div className="flex-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl overflow-hidden flex flex-col relative shadow-xl transition-all duration-300">
         {/* Header Controls */}
-        <div className="p-4 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex flex-wrap justify-between items-center gap-3">
+        <div className="p-4 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center space-x-3">
-            <div className="p-1.5 bg-[#79E282]/10 rounded-lg text-[#79E282]">
+            <div className="p-1.5 bg-[var(--accent-primary)]/10 rounded-lg text-[var(--accent-primary)]">
               <Layers className="h-4 w-4" />
             </div>
             <div>
@@ -302,51 +388,86 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
               <span className="flex items-center text-[#38BDF8]">
                 <span className="h-2 w-2 bg-[#38BDF8] mr-1" /> Bridge
               </span>
-              <span className="flex items-center text-[#79E282]">
-                <span className="h-2 w-2 bg-[#79E282] mr-1" /> VASP
+              <span className="flex items-center text-[var(--accent-primary)]">
+                <span className="h-2 w-2 bg-[var(--accent-primary)] mr-1" /> VASP
               </span>
             </div>
 
-            {/* 2D / 3D Isometric Plane View Toggle */}
+            {/* 2D / 3D Interactive Sphere View Toggle */}
             <button
               onClick={() => setIs3DView(!is3DView)}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all duration-200 ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all duration-200 cursor-pointer ${
                 is3DView
-                  ? 'bg-[#79E282] text-[#0B0B0D] border-[#79E282] shadow-md shadow-[#79E282]/20'
-                  : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[#79E282]'
+                  ? 'bg-[var(--accent-primary)] text-[var(--bg-card)] border-[var(--accent-primary)] shadow-md'
+                  : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--accent-primary)]'
               }`}
-              title="Toggle between standard 2D and 3D isometric plane projection"
+              title="Toggle between 2D Cytoscape view and 360-degree interactive 3D spherical globe"
             >
               <Box className="h-3.5 w-3.5" />
-              <span>{is3DView ? '3D Isometric Active' : '2D / 3D Plane View'}</span>
+              <span>{is3DView ? '3D Sphere Active' : '2D / 3D Sphere View'}</span>
             </button>
           </div>
         </div>
 
         {/* Graph Canvas */}
         {loading ? (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-2 text-xs font-mono text-[#79E282]">
-            <RefreshCw className="h-6 w-6 animate-spin text-[#79E282]" />
+          <div className="flex-1 flex flex-col items-center justify-center space-y-2 text-xs font-mono text-[var(--accent-primary)]">
+            <RefreshCw className="h-6 w-6 animate-spin text-[var(--accent-primary)]" />
             <span>RENDERING GRAPH TOPOLOGY...</span>
           </div>
+        ) : is3DView ? (
+          /* True Interactive 3D Spherical Graph Canvas */
+          <div className="flex-1 flex flex-col relative overflow-hidden">
+            <Sphere3DGraph
+              elements={elements}
+              selectedNode={selectedNode}
+              onSelectNode={setSelectedNode}
+              theme={currentTheme}
+            />
+          </div>
         ) : (
+          /* 2D Topology with 3D Lit Nodes */
           <div
-            className={`flex-1 relative overflow-hidden bg-[var(--bg-main)] ${
-              is3DView ? 'graph-3d-plane' : 'graph-2d-plane'
-            }`}
+            className="flex-1 relative overflow-hidden transition-all duration-300"
             style={{
-              backgroundImage: is3DView
-                ? 'radial-gradient(circle at 50% 50%, rgba(121,226,130,0.08) 0%, transparent 70%), linear-gradient(rgba(36,51,56,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(36,51,56,0.3) 1px, transparent 1px)'
-                : undefined,
-              backgroundSize: is3DView ? '100% 100%, 30px 30px, 30px 30px' : undefined,
+              backgroundColor: 'var(--graph-bg)',
+              backgroundImage: `radial-gradient(circle at 50% 50%, var(--border-color) 0%, transparent 75%),
+                radial-gradient(var(--graph-grid) 1.5px, transparent 1.5px)`,
+              backgroundSize: '100% 100%, 24px 24px',
             }}
           >
+            {/* Quick Floating Zoom & View Controls */}
+            <div className="absolute top-4 right-4 z-10 flex items-center space-x-1.5 bg-[var(--bg-card)]/90 backdrop-blur-md p-1.5 rounded-xl border border-[var(--border-color)] shadow-lg">
+              <button
+                onClick={handleZoomIn}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                title="Zoom In (+)"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleZoomOut}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                title="Zoom Out (-)"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleFit}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                title="Fit Graph to Screen"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+            </div>
+
             <CytoscapeComponent
               elements={elements}
               style={{ width: '100%', height: '100%' }}
               layout={layout}
               stylesheet={style}
               cy={(cy) => {
+                cyRef.current = cy;
                 cy.on('tap', 'node', (evt) => {
                   setSelectedNode(evt.target.data());
                 });
@@ -364,17 +485,17 @@ const FundFlowGraph: React.FC<FundFlowGraphProps> = ({ activeCase }) => {
         <div className="w-full lg:w-80 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 shadow-xl flex flex-col space-y-4">
           <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
             <h3 className="font-bold text-sm text-[var(--text-primary)] flex items-center">
-              <Info className="h-4 w-4 mr-2 text-[#79E282]" />
+              <Info className="h-4 w-4 mr-2 text-[var(--accent-primary)]" />
               Entity Telemetry
             </h3>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-surface)] text-[#79E282] uppercase border border-[var(--border-color)]">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--accent-primary)] uppercase border border-[var(--border-color)]">
               {selectedNode.type || 'HOP'}
             </span>
           </div>
 
           <div className="space-y-3 text-xs overflow-y-auto max-h-[500px]">
             {Object.entries(selectedNode).map(([k, v]) => (
-              <div key={k} className="p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)]">
+              <div key={k} className="p-2.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)]">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--text-muted)] block mb-0.5">
                   {k}
                 </span>
