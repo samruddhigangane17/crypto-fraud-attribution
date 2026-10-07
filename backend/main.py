@@ -32,7 +32,6 @@ async def lifespan(app: FastAPI):
     # Shutdown: Stop worker gracefully
     global_background_worker.stop()
 
-
 app = FastAPI(
     title="Real-Time Crypto Fraud Attribution System API",
     description="Forensic investigation API for multi-hop tracing, VASP attribution, explainable risk scoring, and evidence report generation.",
@@ -41,13 +40,17 @@ app = FastAPI(
 )
 
 # Load allowed origin from environment (coordinated with Member 3's frontend URL)
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+allowed_origins_env = [
+    orig.strip()
+    for orig in os.getenv("FRONTEND_ORIGIN", "http://localhost:3000").split(",")
+    if orig.strip()
+]
 
 # Enable CORS for React frontend with credentials
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_ORIGIN,
+    allow_origins=allowed_origins_env + [
+        "https://crypto-fraud-attribution-62sz.vercel.app",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
@@ -55,7 +58,6 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,4 +95,3 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
-
