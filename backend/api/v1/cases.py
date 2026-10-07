@@ -68,6 +68,14 @@ logger = logging.getLogger("crypto_attribution.api.v1.cases")
 router = APIRouter(prefix="/api/v1", tags=["NCRP / SAHYOG V1 Integration"])
 
 
+def _hidden_victim_case_ids() -> set:
+    """Victim-reported cases stay out of these (open) endpoints until an officer verifies them."""
+    from backend.victim.store import global_victim_store
+    hidden = {cid for cid, c in inv._INVESTIGATIONS.items()
+              if c.get("source") == "victim_portal" and not c.get("source_verified")}
+    return hidden | global_victim_store.hidden_case_ids()
+
+
 class CaseCreateOptions(BaseModel):
     max_hops: int = 5
     min_taint_share: float = Field(default=0.05, ge=0.0, le=1.0)
@@ -349,10 +357,13 @@ def list_cases(limit: int = 50):
     """List all registered cases (combining in-memory and persisted investigations)."""
     seen_ids = set()
     results = []
+    hidden_ids = _hidden_victim_case_ids()
 
     # 1. First format active in-memory cases
     for cid in list(inv._INVESTIGATIONS.keys()):
         seen_ids.add(cid)
+        if cid in hidden_ids:
+            continue
         try:
             results.append(_format_case_contract(cid))
         except Exception as e:
@@ -365,7 +376,7 @@ def list_cases(limit: int = 50):
             db_rows = sorted(db_rows, key=lambda r: r.get("created_at") or "", reverse=True)
             for row in db_rows:
                 cid = row.get("id")
-                if not cid or cid in seen_ids:
+                if not cid or cid in seen_ids or cid in hidden_ids:
                     continue
                 seen_ids.add(cid)
                 results.append(
@@ -397,6 +408,8 @@ def list_cases(limit: int = 50):
 @router.get("/cases/{case_id}")
 def get_case_ncrp(case_id: str):
     """Retrieve case details formatted for NCRP / SAHYOG integration."""
+    if case_id in _hidden_victim_case_ids():
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found.")
     return _format_case_contract(case_id)
 
 

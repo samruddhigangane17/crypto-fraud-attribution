@@ -32,3 +32,6 @@ Thumbs.db
 # Scratch and report dumps
 scratch/
 report_sections_dump.txt
+
+# Victim evidence uploads
+evidence_store/

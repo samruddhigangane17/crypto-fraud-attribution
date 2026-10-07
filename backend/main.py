@@ -61,12 +61,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from starlette.requests import Request
+
+@app.middleware("http")
+async def prefix_compat_middleware(request: Request, call_next):
+    if request.url.path.startswith("/victim/") and not request.url.path.startswith("/victim/api/"):
+        request.scope["path"] = "/api" + request.url.path
+    return await call_next(request)
+
 from backend.api.v1 import cases_router
+from backend.api.victim import router as victim_router
+from backend.api.intake import router as intake_router
 
 # Mount Member Routers
 app.include_router(attribution_router)
 app.include_router(investigations_router)
 app.include_router(cases_router)
+app.include_router(victim_router)
+app.include_router(intake_router)
 
 
 @app.get("/health", tags=["Health"])
