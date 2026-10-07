@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   ShieldAlert,
@@ -11,6 +11,9 @@ import {
   FolderOpen,
   Sun,
   Moon,
+  Inbox,
+  Shield,
+  ExternalLink,
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { apiJson } from './lib/api';
@@ -25,6 +28,8 @@ import MonitoringAlerts from './components/MonitoringAlerts';
 import EvidenceReport from './components/EvidenceReport';
 import CryptoTracerLogo from './components/CryptoTracerLogo';
 import Floating3DCoins from './components/Floating3DCoins';
+import { IntakeQueue } from './components/victim/IntakeQueue';
+import { VictimPortal } from './components/victim/VictimPortal';
 
 export interface CaseSummary {
   id: string;
@@ -42,8 +47,17 @@ export interface CaseSummary {
 const STORAGE_KEY = 'crypto_fraud_active_case';
 const THEME_KEY = 'cryptotracer_theme';
 
-function Dashboard({ session }: { session: Session }) {
+function Dashboard({
+  session,
+  onSwitchToVictim,
+  onSignOut,
+}: {
+  session: Session;
+  onSwitchToVictim?: () => void;
+  onSignOut?: () => void;
+}) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [activeCase, setActiveCase] = useState<string | null>(() => {
     try {
@@ -132,9 +146,10 @@ function Dashboard({ session }: { session: Session }) {
     return () => clearInterval(t);
   }, [activeCase]);
 
-  // 4 Core Separate Tabs (strictly 1 active view at a time)
+  // Core Workflow Tabs (strictly 1 active view at a time)
   const coreTabs = [
     { path: '/', label: 'New Investigation', icon: Search },
+    { path: '/intake', label: 'Registered Complaints', icon: Inbox },
     { path: '/graph', label: 'Fund-Flow Graph', icon: Share2 },
     { path: '/recovery', label: 'Recovery Layer', icon: Clock },
     { path: '/report', label: 'Evidence Report', icon: FileText },
@@ -147,50 +162,68 @@ function Dashboard({ session }: { session: Session }) {
   ];
 
   const getPageInfo = () => {
-    switch (location.pathname) {
-      case '/':
-        return {
-          title: 'New Investigation',
-          category: 'TARGET INGESTION',
-          subtitle: 'Multi-chain target ingestion, address resolution, and transaction dispatch',
-        };
-      case '/graph':
-        return {
-          title: 'Fund-Flow Graph',
-          category: 'MULTI-HOP GRAPH',
-          subtitle: 'Interactive multi-hop taint tracking, flow topology, and cluster expansion',
-        };
-      case '/recovery':
-        return {
-          title: 'Recovery Layer',
-          category: 'ASSET RECOVERY',
-          subtitle: 'Golden Hour countdown clock, typology classifier, and legal freeze pack generation',
-        };
-      case '/report':
-        return {
-          title: 'Evidence Report',
-          category: 'FORENSIC DOSSIER',
-          subtitle: 'Court-admissible tamper-evident report with SHA-256 digital signature verification',
-        };
-      case '/risk':
-        return {
-          title: 'Risk & Attribution',
-          category: 'SCORING ENGINE',
-          subtitle: 'Deterministic forensic risk classification, entity profiling, and typology analysis',
-        };
-      case '/alerts':
-        return {
-          title: 'Monitoring Alerts',
-          category: 'SURVEILLANCE',
-          subtitle: 'Real-time on-chain wallet monitoring, velocity alerts, and convergence detection',
-        };
-      default:
-        return {
-          title: 'Forensic Workspace',
-          category: 'DASHBOARD',
-          subtitle: 'CryptoTracer Anti-Fraud Attribution Suite',
-        };
+    const path = location.pathname;
+    if (path === '/' || path === '') {
+      return {
+        title: 'New Investigation',
+        category: 'TARGET INGESTION',
+        subtitle: 'Multi-chain target ingestion, address resolution, and transaction dispatch',
+      };
     }
+    if (path.startsWith('/intake')) {
+      return {
+        title: 'Registered Complaints',
+        category: 'CITIZEN COMPLAINTS INTAKE',
+        subtitle: 'Manage registered victim complaints, advance lifecycle verification, and promote to active investigation',
+      };
+    }
+    if (path.startsWith('/graph')) {
+      return {
+        title: 'Fund-Flow Graph',
+        category: 'MULTI-HOP GRAPH',
+        subtitle: 'Interactive multi-hop taint tracking, flow topology, and cluster expansion',
+      };
+    }
+    if (path.startsWith('/recovery')) {
+      return {
+        title: 'Recovery Layer',
+        category: 'ASSET RECOVERY',
+        subtitle: 'Golden Hour countdown clock, typology classifier, and legal freeze pack generation',
+      };
+    }
+    if (path.startsWith('/report')) {
+      return {
+        title: 'Evidence Report',
+        category: 'FORENSIC DOSSIER',
+        subtitle: 'Court-admissible tamper-evident report with SHA-256 digital signature verification',
+      };
+    }
+    if (path.startsWith('/risk')) {
+      return {
+        title: 'Risk & Attribution',
+        category: 'SCORING ENGINE',
+        subtitle: 'Deterministic forensic risk classification, entity profiling, and typology analysis',
+      };
+    }
+    if (path.startsWith('/alerts')) {
+      return {
+        title: 'Monitoring Alerts',
+        category: 'SURVEILLANCE',
+        subtitle: 'Real-time on-chain wallet monitoring, velocity alerts, and convergence detection',
+      };
+    }
+    if (path.startsWith('/victim')) {
+      return {
+        title: 'Citizen Victim Portal',
+        category: 'CITIZEN INGESTION',
+        subtitle: 'Citizen complaint wizard, evidence vault, and case status tracker',
+      };
+    }
+    return {
+      title: 'Forensic Workspace',
+      category: 'DASHBOARD',
+      subtitle: 'CryptoTracer Anti-Fraud Attribution Suite',
+    };
   };
 
   const handleSelectChainFromCoins = (chain: 'ethereum' | 'tron' | 'bitcoin' | 'bsc') => {
@@ -214,7 +247,9 @@ function Dashboard({ session }: { session: Session }) {
             <div className="space-y-1">
               {coreTabs.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path;
+                const isActive = item.path === '/'
+                  ? (location.pathname === '/' || location.pathname === '')
+                  : location.pathname.startsWith(item.path);
 
                 return (
                   <Link
@@ -242,7 +277,7 @@ function Dashboard({ session }: { session: Session }) {
             <div className="space-y-1">
               {secondaryLinks.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path;
+                const isActive = location.pathname.startsWith(item.path);
 
                 return (
                   <Link
@@ -266,8 +301,14 @@ function Dashboard({ session }: { session: Session }) {
         {/* Sidebar Footer with Sign Out */}
         <div className="p-3 border-t border-[var(--border-color)]">
           <button
-            onClick={() => supabase.auth.signOut()}
-            className="flex items-center w-full px-3 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[#D95F63] hover:bg-[#D95F63]/10 rounded-xl transition-colors"
+            onClick={() => {
+              if (onSignOut) {
+                onSignOut();
+              } else {
+                supabase.auth.signOut();
+              }
+            }}
+            className="flex items-center w-full px-3 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[#D95F63] hover:bg-[#D95F63]/10 rounded-xl transition-colors cursor-pointer"
           >
             <LogOut className="mr-2.5 h-4 w-4" />
             Sign Out
@@ -328,6 +369,17 @@ function Dashboard({ session }: { session: Session }) {
               )}
             </div>
 
+            {/* Citizen Victim Portal Switcher */}
+            <button
+              onClick={() => (onSwitchToVictim ? onSwitchToVictim() : navigate('/victim'))}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] hover:bg-[var(--accent-primary)]/10 text-xs font-semibold text-[var(--accent-primary)] hover:border-[var(--accent-primary)] transition-all shadow-sm"
+              title="Open Citizen Victim Portal"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Citizen Portal</span>
+              <ExternalLink className="h-3 w-3 opacity-70" />
+            </button>
+
             {/* Light / Dark Mode Toggle */}
             <button
               onClick={toggleTheme}
@@ -369,7 +421,7 @@ function Dashboard({ session }: { session: Session }) {
         {/* Main Content Router — STRICT TAB ISOLATION */}
         <main className="flex-1 overflow-auto p-6 bg-[var(--bg-primary)] transition-colors duration-200 flex flex-col">
           {/* TAB 1: Only renders 3D Floating Coins Hero + NewInvestigation */}
-          {location.pathname === '/' && (
+          {(location.pathname === '/' || location.pathname === '') && (
             <div className="space-y-6">
               <Floating3DCoins
                 onSelectChain={handleSelectChainFromCoins}
@@ -387,28 +439,73 @@ function Dashboard({ session }: { session: Session }) {
           )}
 
           {/* TAB 2: Only renders FundFlowGraph (full width, no side clocks) */}
-          {location.pathname === '/graph' && (
+          {location.pathname.startsWith('/graph') && (
             <div className="flex-1 flex flex-col h-full min-h-[550px]">
               <FundFlowGraph activeCase={activeCase} />
             </div>
           )}
 
           {/* TAB 3: Only renders RecoveryLayer */}
-          {location.pathname === '/recovery' && (
+          {location.pathname.startsWith('/recovery') && (
             <RecoveryLayer activeCase={activeCase} />
           )}
 
           {/* TAB 4: Only renders EvidenceReport */}
-          {location.pathname === '/report' && (
+          {location.pathname.startsWith('/report') && (
             <EvidenceReport activeCase={activeCase} />
           )}
 
-          {/* Secondary Telemetry Routes (only rendered when their specific path is active) */}
-          {location.pathname === '/risk' && (
+          {/* TAB: Intake Queue (Registered Complaints) */}
+          {location.pathname.startsWith('/intake') && (
+            <IntakeQueue setActiveCase={setActiveCase} />
+          )}
+
+          {/* TAB: Citizen Victim Portal */}
+          {location.pathname.startsWith('/victim') && (
+            <div className="flex-1 -m-6">
+              <VictimPortal
+                onSwitchToInvestigator={() => (onSwitchToVictim ? onSwitchToVictim() : navigate('/'))}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+              />
+            </div>
+          )}
+
+          {/* Secondary Telemetry Routes */}
+          {location.pathname.startsWith('/risk') && (
             <RiskAttribution activeCase={activeCase} />
           )}
-          {location.pathname === '/alerts' && (
+          {location.pathname.startsWith('/alerts') && (
             <MonitoringAlerts activeCase={activeCase} />
+          )}
+
+          {/* Defensive fallback for unmatched routes so screen is NEVER blank */}
+          {!['/', '', '/graph', '/recovery', '/report', '/intake', '/victim', '/risk', '/alerts'].some(
+            (p) => p === location.pathname || (p !== '' && p !== '/' && location.pathname.startsWith(p))
+          ) && (
+            <div className="flex-1 flex items-center justify-center p-8 text-center">
+              <div className="max-w-md p-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl space-y-3">
+                <Inbox className="h-10 w-10 text-[var(--accent-primary)] mx-auto opacity-80" />
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">Module View Restored</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  The requested path <code className="text-[var(--accent-primary)]">{location.pathname}</code> is not directly mapped. Choose a core module below:
+                </p>
+                <div className="pt-2 flex justify-center space-x-3">
+                  <Link
+                    to="/"
+                    className="px-4 py-2 bg-[var(--accent-primary)] text-black rounded-xl text-xs font-bold hover:opacity-90 transition-all"
+                  >
+                    New Investigation
+                  </Link>
+                  <Link
+                    to="/intake"
+                    className="px-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl text-xs font-bold hover:bg-[var(--bg-card)] transition-all"
+                  >
+                    Registered Complaints
+                  </Link>
+                </div>
+              </div>
+            </div>
           )}
         </main>
       </div>
@@ -416,13 +513,80 @@ function Dashboard({ session }: { session: Session }) {
   );
 }
 
-function App() {
+const DEV_SESSION_KEY = 'cryptotracer_dev_session';
+
+function AppComponent() {
   const [session, setSession] = useState<Session | null>(null);
+  const [devSession, setDevSession] = useState<Session | null>(() => {
+    try {
+      const stored = localStorage.getItem(DEV_SESSION_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return null;
+  });
   const [loading, setLoading] = useState(true);
+  const [portalMode, setPortalMode] = useState<'investigator' | 'victim'>(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/victim')) {
+      return 'victim';
+    }
+    return 'investigator';
+  });
+
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return (localStorage.getItem(THEME_KEY) as 'dark' | 'light') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const handleDevLogin = (officerEmail: string) => {
+    const mockSession = {
+      access_token: 'dev-token-' + Date.now(),
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: 'dev-refresh',
+      user: {
+        id: 'dev-investigator-001',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+        email: officerEmail || 'officer.lead@cryptotracer.gov',
+      },
+    } as unknown as Session;
+
+    try {
+      localStorage.setItem(DEV_SESSION_KEY, JSON.stringify(mockSession));
+    } catch {}
+    setDevSession(mockSession);
+  };
+
+  const handleSignOut = () => {
+    try {
+      localStorage.removeItem(DEV_SESSION_KEY);
+    } catch {}
+    setDevSession(null);
+    setSession(null);
+    supabase.auth.signOut().catch(() => {});
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
 
@@ -446,15 +610,91 @@ function App() {
     );
   }
 
-  if (!session) {
-    return <Login />;
+  // Standalone Citizen Victim Portal view (no investigator auth required)
+  if (portalMode === 'victim') {
+    return (
+      <Router>
+        <VictimPortal
+          onSwitchToInvestigator={() => setPortalMode('investigator')}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
+      </Router>
+    );
+  }
+
+  const currentSession = session || devSession;
+
+  if (!currentSession) {
+    return (
+      <Login
+        onOpenVictimPortal={() => setPortalMode('victim')}
+        onVictimAuthenticated={() => setPortalMode('victim')}
+        onInvestigatorDevLogin={handleDevLogin}
+      />
+    );
   }
 
   return (
     <Router>
-      <Dashboard session={session} />
+      <Dashboard
+        session={currentSession}
+        onSwitchToVictim={() => setPortalMode('victim')}
+        onSignOut={handleSignOut}
+      />
     </Router>
   );
 }
 
-export default App;
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('App top-level error caught by boundary:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen bg-[#0B0B0D] text-[#F3F8F5] flex items-center justify-center p-6 font-['Montserrat']">
+          <div className="bg-[#141419] border border-[#23232C] rounded-2xl p-8 text-center space-y-4 max-w-md w-full shadow-2xl">
+            <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-400 mx-auto flex items-center justify-center">
+              <Shield className="h-7 w-7" />
+            </div>
+            <h2 className="text-base font-bold text-white">CryptoTracer Session Restored</h2>
+            <p className="text-xs text-[#9E9EA8]">
+              A temporary interface exception was caught. Click below to refresh your view.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.reload();
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#79E282] text-black font-bold text-xs hover:opacity-90 shadow-md cursor-pointer"
+              >
+                Reload Console
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <AppComponent />
+    </AppErrorBoundary>
+  );
+}
