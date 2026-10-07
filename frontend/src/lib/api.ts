@@ -15,7 +15,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
-  const primaryUrl = \https://crypto-fraud-attribution-tj38.onrender.com${path}`;`
+  const primaryUrl = `https://crypto-fraud-attribution-tj38.onrender.com${path}`;
   try {
     return await fetch(primaryUrl, { ...init, headers });
   } catch (err) {
