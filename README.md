@@ -5,7 +5,7 @@
 <h1 align="center">CryptoTracer</h1>
 <h3 align="center">Real-Time Crypto Fraud Attribution & Golden Hour Recovery System</h3>
 <p align="center">
-  <em>Developed by <strong>Team Modak_v21</strong> &bull; DecentraHack &bull; PCCOE Pune</em>
+  <em>Developed by <strong>Team Modak_v21</strong></em>
 </p>
 
 <p align="center">
@@ -55,7 +55,7 @@ Manual Tracing (Before)       CryptoTracer (After)
 
 ---
 
-## 🛡️ Citizen Victim Portal (USP 3: DPDP Safe Realm)
+## 🛡️ Citizen Victim Portal (DPDP Safe Realm)
 
 * **🔒 Strict Data Isolation:** A dedicated, privacy-preserving portal for victims. Internal investigator intelligence (risk scores, clustering findings, VASP targets, internal notes) is strictly quarantined from public view to prevent tip-offs.
 * **📝 5-Step Complaint Wizard:** Guided intake flow capturing fraud typologies, loss assets, and suspect wallets with real-time chain auto-detection.
@@ -196,10 +196,6 @@ npm run build
 ---
 
 ## 👥 Team Modak_v21
-
-* **College:** Pimpri Chinchwad College of Engineering (PCCOE), Pune
-* **Department:** Department of Computer Engineering
-* **Hackathon:** DecentraHack 2026
 
 ---
 
